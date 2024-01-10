@@ -17,5 +17,6 @@ pub const APP_INPUT_0: usize = 5;
 
 pub enum AppId {
 	LOTTERY = 1,
-	SWAP = 2
+	SWAP = 2,
+	TRADE = 3,
 }
