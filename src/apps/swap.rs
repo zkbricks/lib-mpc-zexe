@@ -24,11 +24,22 @@ pub fn prover<const N: usize>(
         &utils::poly_domain_shift::<F,N>(&input_coins_poly[0])
     );
 
+    let input_coin_1_shifted_poly = utils::poly_domain_shift::<F,N>(
+        &utils::poly_domain_shift::<F,N>(&input_coins_poly[1])
+    );
+
+    let lhs_poly_0 = lagrange_polynomials[AMOUNT].clone()
+    .mul(
+        &output_coins_poly[0].clone()
+        .sub(&input_coins_poly[0].clone()
+            .mul(&input_coin_0_shifted_poly.clone()))
+    );
+
     let lhs_poly_1 = lagrange_polynomials[AMOUNT].clone()
         .mul(
-            &output_coins_poly[0].clone()
-            .sub(&input_coins_poly[0].clone()
-                .mul(&input_coin_0_shifted_poly.clone()))
+            &input_coins_poly[1].clone()
+            .sub(&output_coins_poly[1].clone()
+                .mul(&input_coin_1_shifted_poly.clone()))
         );
 
     // same asset id: input[0].asset_id = output[0].asset_id
@@ -63,8 +74,19 @@ pub fn prover<const N: usize>(
             .sub(&app_id_swap_poly)
         );
 
-    let lhs_poly = vec![lhs_poly_1, lhs_poly_2, lhs_poly_3, lhs_poly_4, lhs_poly_5];
-    let additional_poly = vec![input_coin_0_shifted_poly];
+    let lhs_poly = vec![
+        lhs_poly_0,
+        lhs_poly_1,
+        lhs_poly_2,
+        lhs_poly_3,
+        lhs_poly_4,
+        lhs_poly_5
+    ];
+
+    let additional_poly = vec![
+        input_coin_0_shifted_poly,
+        input_coin_1_shifted_poly
+    ];
 
     (lhs_poly, additional_poly)
 
@@ -85,9 +107,13 @@ pub fn verifier<const N: usize>(
 
     // polynomial identity with Schwartz-Zippel
     //APP_INPUT_0 is the exchange rate
-    let lhs_1 = lagrange_polynomials[AMOUNT].evaluate(&r) * 
+    let lhs_0 = lagrange_polynomials[AMOUNT].evaluate(&r) * 
         (proof.output_coins_opening[0] - 
             proof.input_coins_opening[0] * proof.additional_opening[0]);
+
+    let lhs_1 = lagrange_polynomials[AMOUNT].evaluate(&r) * 
+        (proof.input_coins_opening[1] - 
+            proof.output_coins_opening[1] * proof.additional_opening[1]);
 
     let lhs_2 = lagrange_polynomials[ASSET_ID].evaluate(&r) * 
         (
@@ -112,7 +138,7 @@ pub fn verifier<const N: usize>(
         app_id_swap_poly.evaluate(&r)
     );
 
-    vec![lhs_1, lhs_2, lhs_3, lhs_4, lhs_5]
+    vec![lhs_0, lhs_1, lhs_2, lhs_3, lhs_4, lhs_5]
 }
 
 #[cfg(test)]
