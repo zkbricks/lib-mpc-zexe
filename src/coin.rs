@@ -15,6 +15,10 @@ pub const APP_ID: usize = 4;
 
 pub const APP_INPUT_0: usize = 5;
 
+pub const APP_INPUT_1: usize = 6;
+
+pub const RHO: usize = 7;
+
 pub enum AppId {
 	LOTTERY = 1,
 	SWAP = 2,

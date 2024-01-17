@@ -3,6 +3,7 @@ mod test_app2;
 mod test_app3;
 mod test_app4;
 mod test_app5;
+mod test_app6;
 
 mod swap;
 mod lottery;
