@@ -1,4 +1,3 @@
-
 // coin data structure: [entropy, owner, asset_id, amount, app (0 = lottery, 1 = swap), app_input: rate]
 
 pub const NUM_FIELDS: usize = 8;
@@ -20,6 +19,7 @@ pub const APP_INPUT_1: usize = 6;
 pub const RHO: usize = 7;
 
 pub enum AppId {
+	PAYMENT = 0,
 	LOTTERY = 1,
 	SWAP = 2,
 	TRADE = 3,
