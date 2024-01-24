@@ -8,3 +8,6 @@ mod test_app6;
 mod swap;
 mod lottery;
 mod trade;
+mod payment;
+
+mod end_to_end_payment;

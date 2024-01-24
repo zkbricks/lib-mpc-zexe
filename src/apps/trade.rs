@@ -19,13 +19,12 @@ pub fn prover<const N: usize>(
         .map(|i| utils::lagrange_poly(N, i))
         .collect::<Vec<DensePolynomial<F>>>();
 
-    let input_coin_0_shifted_poly = utils::poly_domain_shift::<F,N>(
-        &utils::poly_domain_shift::<F,N>(&input_coins_poly[0])
-    );
+    let shift = APP_INPUT_0 - AMOUNT;
+    let input_coin_0_shifted_poly =
+        utils::poly_domain_shift::<F,N>(&input_coins_poly[0], shift);
 
-    let input_coin_1_shifted_poly = utils::poly_domain_shift::<F,N>(
-        &utils::poly_domain_shift::<F,N>(&input_coins_poly[1])
-    );
+    let input_coin_1_shifted_poly =
+        utils::poly_domain_shift::<F,N>(&input_coins_poly[1], shift);
 
     //output = (input - change) * rate
     let input_minus_change_poly = input_coins_poly[0].clone()

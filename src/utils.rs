@@ -101,15 +101,17 @@ pub fn compute_constant_poly<F: FftField + PrimeField>(
 
 //outputs f(ω x)
 pub fn poly_domain_shift<F: FftField + PrimeField, const N: usize>(
-    f: &DensePolynomial<F>
+    f: &DensePolynomial<F>,
+    shift: usize
 ) -> DensePolynomial<F> {
     let domain = Radix2EvaluationDomain::<F>::new(N).unwrap();
     let ω = domain.group_gen;
+    let k = ω.pow([shift as u64]);
 
     let mut new_poly = f.clone();
     for i in 1..(f.degree() + 1) { //we don't touch the zeroth coefficient
-        let ω_pow_i: F = ω.pow([i as u64]);
-        new_poly.coeffs[i] = new_poly.coeffs[i] * ω_pow_i;
+        let k_pow_i: F = k.pow([i as u64]);
+        new_poly.coeffs[i] = new_poly.coeffs[i] * k_pow_i;
     }
     new_poly
 }

@@ -10,6 +10,7 @@ use ark_poly::{
     Radix2EvaluationDomain,
     Evaluations
 };
+use ark_ff::{BigInteger, BigInt};
 use ark_serialize::CanonicalSerialize;
 use ark_bls12_377::Bls12_377;
 
@@ -271,6 +272,25 @@ fn kzg_crs<const N: usize>(
             .collect(),
     }
 
+}
+
+pub fn coin_as_plonk_record<const N: usize>(
+	coin: &JZRecord<N>,
+) -> PlonkDataRecord::<N> {
+
+	// transform record's fields from byte array to field elements
+	let fields: Vec<F> = coin.fields
+		.iter()
+		.map(|x| F::from(
+			BigInt::<4>::from_bits_le(
+				utils::bytes_to_bits(x).as_slice()
+			)
+		))
+		.collect::<Vec<F>>();
+
+    PlonkDataRecord::<N> {
+        fields: fields.try_into().unwrap()
+    }
 }
 
 fn record_poly<const N: usize>(record: &PlonkDataRecord<N>) -> DensePolynomial<F> {    
