@@ -418,12 +418,9 @@ pub fn mpc_verifier<const N: usize>(
 
 #[cfg(test)]
 mod tests {
-    use crate::record_commitment::*;
     use rand_chacha::rand_core::SeedableRng;
-    use rand::RngCore;
     use crate::plonk::*;
     use crate::apps::end_to_end_payment;
-    use ark_ff::{BigInt, BigInteger};
     use super::*;
 
     #[test]
@@ -448,7 +445,5 @@ mod tests {
         plonk_verify(&crs, &proof, end_to_end_payment::mpc_verifier::<8>);
         
     }
-
-
 
 }

@@ -146,7 +146,7 @@ mod tests {
     use rand::RngCore;
     use crate::record_commitment::*;
     use crate::plonk::*;
-    use crate::apps::swap;
+    use crate::apps::collaborative_proof_swap;
     use ark_ff::{BigInt, BigInteger};
     use super::*;
 
@@ -217,10 +217,14 @@ mod tests {
             &crs, 
             vec![plonk_coins[0].clone(), plonk_coins[1].clone()].as_slice(), 
             vec![plonk_coins[2].clone(), plonk_coins[3].clone()].as_slice(),
-            crate::apps::swap::prover::<8>
+            collaborative_proof_swap::prover::<8>
         );
 
-        plonk_verify(&crs, &proof, swap::verifier::<8>);
+        plonk_verify(
+            &crs,
+            &proof,
+            collaborative_proof_swap::verifier::<8>
+        );
         
     }
 }
