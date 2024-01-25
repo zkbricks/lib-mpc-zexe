@@ -5,9 +5,9 @@ use ark_poly::{
     univariate::DensePolynomial
 };
 
-use crate::utils;
-use crate::collaborative_snark::plonk::PlonkProof;
-use crate::coin::*;
+use lib_mpc_zexe::utils;
+use lib_mpc_zexe::collaborative_snark::plonk::PlonkProof;
+use lib_mpc_zexe::coin::*;
 
 type F = ark_bls12_377::Fr;
 
@@ -185,9 +185,9 @@ pub fn verifier<const N: usize>(
 mod tests {
     use rand_chacha::rand_core::SeedableRng;
     use rand::RngCore;
-    use crate::record_commitment::*;
-    use crate::collaborative_snark::plonk::*;
-    use crate::apps::collaborative_proof_trade;
+    use lib_mpc_zexe::record_commitment::*;
+    use lib_mpc_zexe::collaborative_snark::plonk::*;
+
     use super::*;
 
     /*
@@ -265,13 +265,13 @@ mod tests {
                 coins[4].clone(),
                 coins[5].clone(),
             ].as_slice(),
-            crate::apps::collaborative_proof_trade::prover::<8>
+            super::prover::<8>
         );
 
         plonk_verify(
             &crs,
             &proof,
-            collaborative_proof_trade::verifier::<8>
+            super::verifier::<8>
         );
 
     }

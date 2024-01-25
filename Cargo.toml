@@ -3,6 +3,18 @@ name = "mpc_zexe"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "lib_mpc_zexe"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mpc_zexe_matchmaker"
+path = "src/services/matchmaker/main.rs"
+
+[[bin]]
+name = "mpc_zexe_prover"
+path = "src/services/prover/main.rs"
+
 [profile.test]
 opt-level = 3
 

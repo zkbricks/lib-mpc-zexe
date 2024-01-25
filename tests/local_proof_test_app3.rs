@@ -9,54 +9,29 @@ use ark_relations::r1cs::*;
 use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
 use ark_snark::SNARK;
 
-use crate::*;
-use crate::vector_commitment::bytes::{*, constraints::*};
-use crate::record_commitment::{*, constraints::*};
-use crate::prf::{*, constraints::*};
-use crate::coin::*;
+use lib_mpc_zexe::vector_commitment::bytes::{*, constraints::*};
+use lib_mpc_zexe::record_commitment::{*, constraints::*};
+use lib_mpc_zexe::{vector_commitment, record_commitment};
 
 pub type ConstraintF = ark_bw6_761::Fr;
 
-pub struct SpendCircuit {
-    pub prf_instance: JZPRFInstance,
+pub struct RecordComMerkleCircuit {
     pub record: JZRecord<8>,
     pub db: JZVectorDB<ark_bls12_377::G1Affine>,
     pub index: usize,
 }
 
-impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
+impl ConstraintSynthesizer<ConstraintF> for RecordComMerkleCircuit {
     //#[tracing::instrument(target = "r1cs", skip(self, cs))]
     fn generate_constraints(
         self,
         cs: ConstraintSystemRef<ConstraintF>,
     ) -> Result<()> {
 
-        //--------------- Private key ------------------
-        let params_var = JZPRFParamsVar::new_constant(
-            cs.clone(),
-            &self.prf_instance.params
-        ).unwrap();
-
-        let prf_instance_var = JZPRFInstanceVar::new_witness(
-            cs.clone(),
-            || Ok(self.prf_instance)
-        ).unwrap();
-
-        prf::constraints::generate_constraints(
-            cs.clone(), &params_var, &prf_instance_var
-        );
-
         //--------------- KZG proof ------------------
 
-        let crs_var = JZKZGCommitmentParamsVar::<8>::new_constant(
-            cs.clone(),
-            self.record.crs.clone()
-        ).unwrap();
-        
-        let coin_var = JZRecordVar::<8>::new_witness(
-            cs.clone(),
-            || Ok(self.record.borrow())
-        ).unwrap();
+        let crs_var = JZKZGCommitmentParamsVar::<8>::new_constant(cs.clone(), self.record.crs.clone()).unwrap();
+        let coin_var = JZRecordVar::<8>::new_witness(cs.clone(), || Ok(self.record.borrow())).unwrap();
 
         let record = self.record.borrow();
         let computed_com = record.blinded_commitment().into_affine();
@@ -119,7 +94,7 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
             cs.clone(), &params_var, &proof_var
         );
 
-        //--------------- Binding the three ------------------
+        //--------------- Binding the two ------------------
 
         let coin_com_affine = coin_var.commitment.to_affine().unwrap();
         // just compare the x-coordinate...that's what compressed mode stores anyways
@@ -132,20 +107,14 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
             byte_var.enforce_equal(&proof_var.leaf_var[i])?;
         }
 
-        // prove ownership of the coin. Does sk correspond to coin's pk?
-        for (i, byte_var) in coin_var.fields[OWNER].iter().enumerate() {
-            byte_var.enforce_equal(&prf_instance_var.output_var[i])?;
-        }
-
         Ok(())
     }
 }
 
-fn setup_witness() -> SpendCircuit {
+fn setup_witness() -> RecordComMerkleCircuit {
     let seed = [0u8; 32];
     let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
 
-    let prf_params = JZPRFParams::trusted_setup(&mut rng);
     let crs = JZKZGCommitmentParams::<8>::trusted_setup(&mut rng);
 
     let mut entropy = [0u8; 24];
@@ -156,17 +125,14 @@ fn setup_witness() -> SpendCircuit {
 
     let mut coins = Vec::new();
     let mut records = Vec::new();
-    for i in 0..16u8 {
-        //first coin is owned by alice, the rest by bob
-        let pubk = if i == 0 { alice_key().1 } else { bob_key().1 };
-
+    for _i in 0..16u8 {
         let fields: [Vec<u8>; 8] = 
         [
             entropy.to_vec(),
-            pubk.to_vec(), //owner
-            vec![40u8], //asset id
-            vec![10u8], //amount
-            vec![0u8], //app id
+            vec![20u8],
+            vec![40u8, 50u8, 60u8, 70u8],
+            vec![40u8, 50u8, 60u8, 70u8],
+            vec![0u8],
             vec![0u8],
             vec![0u8],
             vec![0u8],
@@ -179,41 +145,13 @@ fn setup_witness() -> SpendCircuit {
 
     let vc_params = JZVectorCommitmentParams::trusted_setup(&mut rng);
     let db = JZVectorDB::<ark_bls12_377::G1Affine>::new(&vc_params, &records);
-
-    SpendCircuit {
-        prf_instance: JZPRFInstance::new(
-            &prf_params, &[0u8; 32], &alice_key().0
-        ),
+    
+    RecordComMerkleCircuit {
+        //record: JZRecord::<8>::new(&crs, &fields, &blind.to_vec()),
         record: coins[0].clone(),
         db: db,
         index: 0,
     }
-}
-
-fn alice_key() -> ([u8; 32], [u8; 31]) {
-    let privkey = [20u8; 32];
-    let pubkey =
-    [
-        218, 61, 173, 102, 17, 186, 176, 174, 
-        54, 64, 4, 87, 114, 16, 209, 133, 
-        153, 47, 114, 88, 54, 48, 138, 7,
-        136, 114, 216, 152, 205, 164, 171
-    ];
-
-    (privkey, pubkey)
-}
-
-fn bob_key() -> ([u8; 32], [u8; 31]) {
-    let privkey = [25u8; 32];
-    let pubkey =
-    [
-        217, 214, 252, 243, 200, 147, 117, 28, 
-        142, 219, 58, 120, 65, 180, 251, 74, 
-        234, 28, 72, 194, 161, 148, 52, 219, 
-        10, 34, 21, 17, 33, 38, 77,
-    ];
-
-    (privkey, pubkey)
 }
 
 #[allow(dead_code)]
@@ -231,7 +169,7 @@ fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
 }
 
 #[test]
-fn spending() {
+fn pok_of_record() {
     let seed = [0u8; 32];
     let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
 

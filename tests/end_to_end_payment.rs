@@ -1,24 +1,58 @@
 use std::borrow::Borrow;
 use rand_chacha::rand_core::SeedableRng;
+use std::ops::*;
+
 use ark_ec::{*};
 use ark_ff::{*};
 use ark_bw6_761::{*};
 use ark_r1cs_std::prelude::*;
 use ark_std::{*, rand::RngCore};
 use ark_relations::r1cs::*;
-use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
+use ark_groth16::{Groth16, ProvingKey, VerifyingKey, Proof};
 use ark_snark::SNARK;
+use ark_poly::{
+    Polynomial,
+    univariate::DensePolynomial
+};
 
-use crate::*;
-use crate::utils;
-use crate::vector_commitment::bytes::{*, constraints::*};
-use crate::record_commitment::{*, constraints::*};
-use crate::prf::{*, constraints::*};
-use crate::coin::*;
+use lib_mpc_zexe::utils;
+use lib_mpc_zexe::{vector_commitment, record_commitment, prf};
+use lib_mpc_zexe::vector_commitment::bytes::{*, constraints::*};
+use lib_mpc_zexe::record_commitment::{*, constraints::*};
+use lib_mpc_zexe::prf::{*, constraints::*};
+use lib_mpc_zexe::coin::*;
+use lib_mpc_zexe::collaborative_snark::plonk::PlonkProof;
 
+type F = ark_bls12_377::Fr;
 pub type ConstraintF = ark_bw6_761::Fr;
 
-pub struct SpendCircuit {
+fn alice_key() -> ([u8; 32], [u8; 31]) {
+    let privkey = [20u8; 32];
+    let pubkey =
+    [
+        218, 61, 173, 102, 17, 186, 176, 174, 
+        54, 64, 4, 87, 114, 16, 209, 133, 
+        153, 47, 114, 88, 54, 48, 138, 7,
+        136, 114, 216, 152, 205, 164, 171
+    ];
+
+    (privkey, pubkey)
+}
+
+fn bob_key() -> ([u8; 32], [u8; 31]) {
+    let privkey = [25u8; 32];
+    let pubkey =
+    [
+        217, 214, 252, 243, 200, 147, 117, 28, 
+        142, 219, 58, 120, 65, 180, 251, 74, 
+        234, 28, 72, 194, 161, 148, 52, 219, 
+        10, 34, 21, 17, 33, 38, 77,
+    ];
+
+    (privkey, pubkey)
+}
+
+pub struct PaymentCircuit {
     pub prf_instance_nullifier: JZPRFInstance,
     pub prf_instance_ownership: JZPRFInstance,
     pub record: JZRecord<8>,
@@ -26,7 +60,7 @@ pub struct SpendCircuit {
     pub index: usize,
 }
 
-impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
+impl ConstraintSynthesizer<ConstraintF> for PaymentCircuit {
     //#[tracing::instrument(target = "r1cs", skip(self, cs))]
     fn generate_constraints(
         self,
@@ -178,7 +212,7 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
     }
 }
 
-fn setup_witness() -> SpendCircuit {
+fn generate_local_witness() -> PaymentCircuit {
     let seed = [0u8; 32];
     let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
 
@@ -201,12 +235,12 @@ fn setup_witness() -> SpendCircuit {
         [
             entropy.to_vec(),
             pubk.to_vec(), //owner
-            vec![40u8], //asset id
-            vec![10u8], //amount
-            vec![0u8], //app id
+            vec![1u8], //asset id 1
+            vec![10u8], //amount 10
+            vec![AppId::PAYMENT as u8], //app id
             vec![0u8],
             vec![0u8],
-            vec![0u8; 32],
+            vec![0u8; 32], //rho
         ];
 
         let coin = JZRecord::<8>::new(&crs, &fields, &blind.to_vec());
@@ -217,7 +251,7 @@ fn setup_witness() -> SpendCircuit {
     let vc_params = JZVectorCommitmentParams::trusted_setup(&mut rng);
     let db = JZVectorDB::<ark_bls12_377::G1Affine>::new(&vc_params, &records);
 
-    SpendCircuit {
+    PaymentCircuit {
         prf_instance_ownership: JZPRFInstance::new(
             &prf_params, &[0u8; 32], &alice_key().0
         ),
@@ -230,38 +264,18 @@ fn setup_witness() -> SpendCircuit {
     }
 }
 
-fn alice_key() -> ([u8; 32], [u8; 31]) {
-    let privkey = [20u8; 32];
-    let pubkey =
-    [
-        218, 61, 173, 102, 17, 186, 176, 174, 
-        54, 64, 4, 87, 114, 16, 209, 133, 
-        153, 47, 114, 88, 54, 48, 138, 7,
-        136, 114, 216, 152, 205, 164, 171
-    ];
 
-    (privkey, pubkey)
+pub struct LocalProof {
+    pub proof: Proof<BW6_761>,
+    pub public_inputs: Vec<ConstraintF>,
+    pub spent_coins: Vec<JZRecord<8>>,
 }
 
-fn bob_key() -> ([u8; 32], [u8; 31]) {
-    let privkey = [25u8; 32];
-    let pubkey =
-    [
-        217, 214, 252, 243, 200, 147, 117, 28, 
-        142, 219, 58, 120, 65, 180, 251, 74, 
-        234, 28, 72, 194, 161, 148, 52, 219, 
-        10, 34, 21, 17, 33, 38, 77,
-    ];
-
-    (privkey, pubkey)
-}
-
-#[allow(dead_code)]
-fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
+pub fn local_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
     let seed = [0u8; 32];
     let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
 
-    let circuit = setup_witness();
+    let circuit = generate_local_witness();
 
     let (pk, vk) = Groth16::<BW6_761>::
         circuit_specific_setup(circuit, &mut rng)
@@ -270,14 +284,11 @@ fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
     (pk, vk)
 }
 
-#[test]
-fn spending() {
+pub fn local_prover(pk: ProvingKey<BW6_761>) -> LocalProof {
     let seed = [0u8; 32];
     let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
 
-    let (pk, vk) = circuit_setup();
-
-    let circuit = setup_witness();
+    let circuit = generate_local_witness();
 
     let blinded_com = circuit.record.blinded_commitment().into_affine();
     let input_root = circuit.db.commitment();
@@ -289,7 +300,7 @@ fn spending() {
         )
     );
 
-    let public_input = vec![ 
+    let public_inputs = vec![ 
         blinded_com.x,
         blinded_com.y,
         input_root.x,
@@ -297,22 +308,134 @@ fn spending() {
         nullifier
     ];
 
-    // public_input.extend_from_slice(
-    //     circuit
-    //         .prf_instance_nullifier
-    //         .evaluate()
-    //         .iter()
-    //         .map(|x| ConstraintF::from(*x))
-    //         .collect::<Vec<ConstraintF>>()
-    //         .as_slice()
-    // );
-
     let now = std::time::Instant::now();
     let proof = Groth16::<BW6_761>::prove(&pk, circuit, &mut rng).unwrap();
     let elapsed = now.elapsed();
     println!("Prover time: {:.2?}", elapsed);
 
-    let valid_proof = Groth16::<BW6_761>::verify(&vk, &public_input, &proof).unwrap();
-    assert!(valid_proof);
+    //grab the spent coin
+    let circuit = generate_local_witness();
+    LocalProof { proof, public_inputs, spent_coins: vec![circuit.record] }
+}
+
+pub fn local_verifier(vk: VerifyingKey<BW6_761>, proof: &LocalProof) {
+    assert!(
+            Groth16::<BW6_761>::verify(
+            &vk,
+            &proof.public_inputs,
+            &proof.proof
+        ).unwrap()
+    );
+}
+
+pub fn mpc_compute<const N: usize>(spent_coin: &JZRecord<N>) -> JZRecord<N> {
+    let mut new_coin = spent_coin.clone();
+    new_coin.fields[OWNER] = bob_key().1.to_vec();
+    new_coin
+}
+
+pub fn mpc_prover<const N: usize>(
+    input_coins_poly: &[DensePolynomial<F>],
+    output_coins_poly: &[DensePolynomial<F>],
+) -> (Vec<DensePolynomial<F>>, Vec<DensePolynomial<F>>) {
+    let lagrange_polynomials = (0..N)
+        .map(|i| utils::lagrange_poly(N, i))
+        .collect::<Vec<DensePolynomial<F>>>();
+
+    // conservation: input[0].amount = output[0].amount
+    let lhs_poly_1 = lagrange_polynomials[AMOUNT].clone()
+        .mul(
+            &(input_coins_poly[0].clone()
+            .sub(&output_coins_poly[0]))
+        );
+
+    // same asset id: input[0].asset_id = output[0].asset_id
+    let lhs_poly_2 = lagrange_polynomials[ASSET_ID].clone()
+        .mul(
+            &(input_coins_poly[0].clone()
+            .sub(&output_coins_poly[0]))
+        );
+
+    // same asset id: input[0].app_id = output[0].asset_id
+    let app_id_lottery_poly = utils::poly_eval_mult_const(
+        &lagrange_polynomials[APP_ID].clone(),
+        &F::from(AppId::PAYMENT as u64)
+    );
+
+    let lhs_poly_3 = lagrange_polynomials[APP_ID].clone()
+        .mul(
+            &input_coins_poly[0].clone()
+            .sub(&app_id_lottery_poly)
+        );
+
+    (vec![lhs_poly_1, lhs_poly_2, lhs_poly_3], vec![])
+}
+
+
+pub fn mpc_verifier<const N: usize>(
+    r: &F, proof: &PlonkProof
+) -> Vec<F> {
+    let lagrange_polynomials = (0..N)
+        .map(|i| utils::lagrange_poly(N, i))
+        .collect::<Vec<DensePolynomial<F>>>();
+
+    let app_id_lottery_poly = utils::poly_eval_mult_const(
+        &lagrange_polynomials[APP_ID].clone(),
+        &F::from(AppId::PAYMENT as u64)
+    );
+
+    // polynomial identity with Schwartz-Zippel
+    let lhs_1 = lagrange_polynomials[AMOUNT].evaluate(&r) * 
+        (
+            proof.input_coins_opening[0] -
+            proof.output_coins_opening[0]
+        );
+
+    let lhs_2 = lagrange_polynomials[ASSET_ID].evaluate(&r) * 
+        (
+            proof.input_coins_opening[0] -
+            proof.output_coins_opening[0]
+        );
+
+    let lhs_3 = lagrange_polynomials[APP_ID].evaluate(&r) *
+        (   
+            proof.input_coins_opening[0] -
+            app_id_lottery_poly.evaluate(&r)
+        );
+
+    vec![lhs_1, lhs_2, lhs_3]
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use rand_chacha::rand_core::SeedableRng;
+    use lib_mpc_zexe::collaborative_snark::plonk::*;
+
+    use super::*;
+
+    #[test]
+    fn test_payment() {
+        let seed = [0u8; 32];
+        let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
+
+        let crs = JZKZGCommitmentParams::<8>::trusted_setup(&mut rng);
+
+        let (pk, vk) = super::local_setup();
+        let local_proof = super::local_prover(pk);
+        let new_coin = super::mpc_compute(&local_proof.spent_coins[0]);
+
+        let proof = plonk_prove(
+            &crs, 
+            vec![local_proof.spent_coins[0].clone()].as_slice(), 
+            vec![new_coin].as_slice(),
+            super::mpc_prover::<8>
+        );
+
+        super::local_verifier(vk, &local_proof);
+        plonk_verify(&crs, &proof, super::mpc_verifier::<8>);
+        
+    }
 
 }

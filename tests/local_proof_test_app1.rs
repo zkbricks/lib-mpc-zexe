@@ -8,8 +8,8 @@ use ark_relations::r1cs::*;
 use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
 use ark_snark::SNARK;
 
-use crate::*;
-use crate::vector_commitment::bytes::{*, constraints::*};
+use lib_mpc_zexe::vector_commitment::bytes::{*, constraints::*};
+use lib_mpc_zexe::vector_commitment;
 
 pub type ConstraintF = ark_bw6_761::Fr;
 

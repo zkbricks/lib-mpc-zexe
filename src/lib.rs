@@ -1,12 +1,10 @@
 #![allow(dead_code)]
 
-mod vector_commitment;
-mod record_commitment;
-mod prf;
+pub mod vector_commitment;
+pub mod record_commitment;
+pub mod prf;
 
-mod coin;
-mod apps;
+pub mod collaborative_snark;
 
-mod collaborative_snark;
-
-mod utils;
+pub mod coin;
+pub mod utils;
