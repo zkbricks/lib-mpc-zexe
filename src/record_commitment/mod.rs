@@ -109,4 +109,16 @@ impl<const N: usize> JZRecord<N> {
 
         com + blind_group_elem
     }
+
+    pub fn fields(&self) -> [F; N] {
+        let mut fields = [F::zero(); N];
+        for (i, field) in self.fields.iter().enumerate() {
+            fields[i] = F::from(
+                BigInt::<4>::from_bits_le(
+                    utils::bytes_to_bits(&field).as_slice()
+                )
+            );
+        }
+        fields
+    }
 }

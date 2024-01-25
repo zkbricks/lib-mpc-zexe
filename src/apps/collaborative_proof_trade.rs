@@ -188,7 +188,6 @@ mod tests {
     use crate::record_commitment::*;
     use crate::plonk::*;
     use crate::apps::collaborative_proof_trade;
-    use ark_ff::{BigInt, BigInteger};
     use super::*;
 
     /*
@@ -236,7 +235,6 @@ mod tests {
 
 
         let mut coins = Vec::new();
-        let mut plonk_coins = Vec::new();
         for i in 0..6 {
             let fields: [Vec<u8>; 8] = 
             [
@@ -251,30 +249,6 @@ mod tests {
             ];
 
             let coin = JZRecord::<8>::new(&crs, &fields, &blind.to_vec());
-
-            // transform record's fields from byte array to field elements
-            let fields: Vec<F> = coin.fields
-            .iter()
-            .map(|x| F::from(
-                BigInt::<4>::from_bits_le(
-                    utils::bytes_to_bits(x).as_slice()
-                )
-            ))
-            .collect::<Vec<F>>();
-
-            plonk_coins.push(PlonkDataRecord::<8> {
-                fields: [
-                    fields[0],
-                    fields[1],
-                    fields[2],
-                    fields[3],
-                    fields[4],
-                    fields[5],
-                    fields[6],
-                    fields[7],
-                ]
-            });
-
             coins.push(coin);
 
         }
@@ -282,14 +256,14 @@ mod tests {
         let proof = plonk_prove(
             &crs, 
             vec![
-                plonk_coins[0].clone(),
-                plonk_coins[1].clone()
+                coins[0].clone(),
+                coins[1].clone()
             ].as_slice(), 
             vec![
-                plonk_coins[2].clone(),
-                plonk_coins[3].clone(),
-                plonk_coins[4].clone(),
-                plonk_coins[5].clone(),
+                coins[2].clone(),
+                coins[3].clone(),
+                coins[4].clone(),
+                coins[5].clone(),
             ].as_slice(),
             crate::apps::collaborative_proof_trade::prover::<8>
         );

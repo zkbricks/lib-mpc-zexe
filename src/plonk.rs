@@ -10,7 +10,6 @@ use ark_poly::{
     Radix2EvaluationDomain,
     Evaluations
 };
-use ark_ff::{BigInteger, BigInt};
 use ark_serialize::CanonicalSerialize;
 use ark_bls12_377::Bls12_377;
 
@@ -58,15 +57,10 @@ pub struct PlonkProof {
     pub additional_opening_proof: Vec<G1Affine>,
 }
 
-#[derive(Clone)]
-pub struct PlonkDataRecord<const N: usize> {
-    pub fields: [F; N]
-}
-
 pub fn plonk_prove<const N: usize>(
     crs: &JZKZGCommitmentParams<N>,
-    input_coins: &[PlonkDataRecord<N>],
-    output_coins: &[PlonkDataRecord<N>],
+    input_coins: &[JZRecord<N>],
+    output_coins: &[JZRecord<N>],
     prover_fn: ProverFnT
 ) -> PlonkProof {
     let kzg_crs = kzg_crs(crs);
@@ -274,29 +268,10 @@ fn kzg_crs<const N: usize>(
 
 }
 
-pub fn coin_as_plonk_record<const N: usize>(
-	coin: &JZRecord<N>,
-) -> PlonkDataRecord::<N> {
-
-	// transform record's fields from byte array to field elements
-	let fields: Vec<F> = coin.fields
-		.iter()
-		.map(|x| F::from(
-			BigInt::<4>::from_bits_le(
-				utils::bytes_to_bits(x).as_slice()
-			)
-		))
-		.collect::<Vec<F>>();
-
-    PlonkDataRecord::<N> {
-        fields: fields.try_into().unwrap()
-    }
-}
-
-fn record_poly<const N: usize>(record: &PlonkDataRecord<N>) -> DensePolynomial<F> {    
+fn record_poly<const N: usize>(record: &JZRecord<N>) -> DensePolynomial<F> {    
     //powers of nth root of unity
     let domain = Radix2EvaluationDomain::<F>::new(N).unwrap();
-    let eval_form = Evaluations::from_vec_and_domain(record.fields.to_vec(), domain);
+    let eval_form = Evaluations::from_vec_and_domain(record.fields().to_vec(), domain);
     //interpolated polynomial over the n points
     eval_form.interpolate()
 }

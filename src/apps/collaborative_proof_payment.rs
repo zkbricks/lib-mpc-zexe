@@ -117,7 +117,6 @@ mod tests {
     use rand::RngCore;
     use crate::plonk::*;
     use crate::apps::collaborative_proof_payment;
-    use ark_ff::{BigInt, BigInteger};
     use super::*;
 
     #[test]
@@ -134,7 +133,6 @@ mod tests {
         rng.fill_bytes(&mut blind);
 
         let mut coins = Vec::new();
-        let mut plonk_coins = Vec::new();
         for i in 0..2 {
             let pubk = if i == 0 { alice_key().1 } else { bob_key().1 };
             let fields: [Vec<u8>; 8] = 
@@ -150,38 +148,14 @@ mod tests {
             ];
 
             let coin = JZRecord::<8>::new(&crs, &fields, &blind.to_vec());
-
-            // transform record's fields from byte array to field elements
-            let fields: Vec<F> = coin.fields
-            .iter()
-            .map(|x| F::from(
-                BigInt::<4>::from_bits_le(
-                    utils::bytes_to_bits(x).as_slice()
-                )
-            ))
-            .collect::<Vec<F>>();
-
-            plonk_coins.push(PlonkDataRecord::<8> {
-                fields: [
-                    fields[0],
-                    fields[1],
-                    fields[2],
-                    fields[3],
-                    fields[4],
-                    fields[5],
-                    fields[6],
-                    fields[7],
-                ]
-            });
-
             coins.push(coin);
 
         }
 
         let proof = plonk_prove(
             &crs, 
-            vec![plonk_coins[0].clone()].as_slice(), 
-            vec![plonk_coins[1].clone()].as_slice(),
+            vec![coins[0].clone()].as_slice(), 
+            vec![coins[1].clone()].as_slice(),
             collaborative_proof_payment::mpc_prover::<8>
         );
 

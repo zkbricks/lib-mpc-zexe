@@ -21,9 +21,7 @@ use crate::vector_commitment::bytes::{*, constraints::*};
 use crate::record_commitment::{*, constraints::*};
 use crate::prf::{*, constraints::*};
 use crate::coin::*;
-use crate::plonk::{PlonkProof, coin_as_plonk_record};
-
-use self::plonk::PlonkDataRecord;
+use crate::plonk::PlonkProof;
 
 type F = ark_bls12_377::Fr;
 pub type ConstraintF = ark_bw6_761::Fr;
@@ -270,7 +268,7 @@ fn generate_local_witness() -> PaymentCircuit {
 pub struct LocalProof {
     pub proof: Proof<BW6_761>,
     pub public_inputs: Vec<ConstraintF>,
-    pub spent_coins: Vec<PlonkDataRecord<8>>,
+    pub spent_coins: Vec<JZRecord<8>>,
 }
 
 pub fn local_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
@@ -317,9 +315,7 @@ pub fn local_prover(pk: ProvingKey<BW6_761>) -> LocalProof {
 
     //grab the spent coin
     let circuit = generate_local_witness();
-    let spent_coin = coin_as_plonk_record(&circuit.record);
-
-    LocalProof { proof, public_inputs, spent_coins: vec![spent_coin] }
+    LocalProof { proof, public_inputs, spent_coins: vec![circuit.record] }
 }
 
 pub fn local_verifier(vk: VerifyingKey<BW6_761>, proof: &LocalProof) {
@@ -332,13 +328,9 @@ pub fn local_verifier(vk: VerifyingKey<BW6_761>, proof: &LocalProof) {
     );
 }
 
-pub fn mpc_compute<const N: usize>(spent_coin: &PlonkDataRecord<N>) -> PlonkDataRecord<N> {
+pub fn mpc_compute<const N: usize>(spent_coin: &JZRecord<N>) -> JZRecord<N> {
     let mut new_coin = spent_coin.clone();
-    let bob = F::from(
-        BigInt::<4>::from_bits_le(
-            utils::bytes_to_bits(&bob_key().1).as_slice()
-        ));
-    new_coin.fields[OWNER] = bob;
+    new_coin.fields[OWNER] = bob_key().1.to_vec();
     new_coin
 }
 
