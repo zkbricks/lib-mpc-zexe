@@ -15,10 +15,10 @@ use ark_bls12_377::Bls12_377;
 
 use crate::utils;
 use crate::record_commitment::*;
-use crate::kzg::*;
+use super::kzg;
 
 type Curve = ark_bls12_377::Bls12_377;
-type KZG = crate::kzg::KZG10::<Curve, DensePolynomial<<Curve as Pairing>::ScalarField>>;
+type KZG = kzg::KZG10::<Curve, DensePolynomial<<Curve as Pairing>::ScalarField>>;
 type F = ark_bls12_377::Fr;
 type G1Affine = <Curve as Pairing>::G1Affine;
 type G2Affine = <Curve as Pairing>::G2Affine;
@@ -251,9 +251,9 @@ pub fn plonk_verify<const N: usize>(
 
 fn kzg_crs<const N: usize>(
     crs: &JZKZGCommitmentParams<N>
-) -> UniversalParams<Bls12_377> {
+) -> kzg::UniversalParams<Bls12_377> {
 
-    UniversalParams::<Bls12_377> {
+    kzg::UniversalParams::<Bls12_377> {
         powers_of_g: crs.crs_coefficient_g1
             .to_owned()
             .iter()

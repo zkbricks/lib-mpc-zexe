@@ -21,7 +21,7 @@ use crate::vector_commitment::bytes::{*, constraints::*};
 use crate::record_commitment::{*, constraints::*};
 use crate::prf::{*, constraints::*};
 use crate::coin::*;
-use crate::plonk::PlonkProof;
+use crate::collaborative_snark::plonk::PlonkProof;
 
 type F = ark_bls12_377::Fr;
 pub type ConstraintF = ark_bw6_761::Fr;
@@ -411,7 +411,7 @@ pub fn mpc_verifier<const N: usize>(
 #[cfg(test)]
 mod tests {
     use rand_chacha::rand_core::SeedableRng;
-    use crate::plonk::*;
+    use crate::collaborative_snark::plonk::*;
     use crate::apps::end_to_end_payment;
     use super::*;
 

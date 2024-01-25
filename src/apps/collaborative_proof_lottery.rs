@@ -6,7 +6,7 @@ use ark_poly::{
 };
 
 use crate::utils;
-use crate::plonk::PlonkProof;
+use crate::collaborative_snark::plonk::PlonkProof;
 use crate::coin::*;
 
 type F = ark_bls12_377::Fr;
@@ -114,7 +114,7 @@ mod tests {
     use crate::record_commitment::*;
     use rand_chacha::rand_core::SeedableRng;
     use rand::RngCore;
-    use crate::plonk::*;
+    use crate::collaborative_snark::plonk::*;
     use crate::apps::collaborative_proof_lottery;
     use super::*;
 

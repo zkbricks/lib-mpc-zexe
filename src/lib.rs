@@ -7,8 +7,6 @@ mod prf;
 mod coin;
 mod apps;
 
-mod kzg;
-mod plonk;
-mod distributed_plonk;
+mod collaborative_snark;
 
 mod utils;
