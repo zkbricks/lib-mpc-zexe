@@ -8,12 +8,16 @@ name = "lib_mpc_zexe"
 path = "src/lib.rs"
 
 [[bin]]
-name = "mpc_zexe_matchmaker"
+name = "matchmaker"
 path = "src/services/matchmaker/main.rs"
 
 [[bin]]
-name = "mpc_zexe_prover"
+name = "prover"
 path = "src/services/prover/main.rs"
+
+[[bin]]
+name = "client"
+path = "src/services/client/main.rs"
 
 [profile.test]
 opt-level = 3
@@ -45,6 +49,15 @@ ark-bls12-377 = { version = "0.4.0", default-features = false, features = [ "cur
 ark-bw6-761 = { version = "0.4.0" }
 ark-ed-on-bls12-377 = { version = "0.4.0", default-features = false, features = [ "r1cs" ] }
 ark-ed-on-bw6-761 = { version = "0.4.0", default-features = false, features = [ "r1cs" ] }
+
+actix-rt = "2.7"
+actix-web = "4"
+reqwest = { version = "0.11", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+redis = "0.24.0"
+tokio = { version = "1.35.1", features = ["full"] }
+bs58 = { version = "*" }
 
 [dev-dependencies]
 ark-relations = { version = "0.4.0", default-features = false }
