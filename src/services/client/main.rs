@@ -49,6 +49,21 @@ async fn submit_order(item: Order) -> Result<(), Error> {
     Ok(())
 }
 
+async fn perform_lottery() -> Result<(), Error> {
+    let client = Client::new();
+    let response = client.post("http://127.0.0.1:8080/lottery")
+        .send()
+        .await?;
+    
+    if response.status().is_success() {
+        println!("Lottery executed successfully");
+    } else {
+        println!("Failed to execute lottery: {:?}", response.status());
+    }
+    
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     let seed = [0u8; 32];
@@ -101,6 +116,7 @@ async fn main() -> Result<(), Error> {
     list_orders().await?;
     submit_order(Order { id: 1, coin: bs58_coins[1].clone() }).await?;
     list_orders().await?;
+    perform_lottery().await?;
 
     Ok(())
 }
