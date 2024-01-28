@@ -1,4 +1,4 @@
-use actix_web::{web, App, HttpServer, HttpResponse, Responder};
+use actix_web::{web, App, HttpServer};
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use lib_mpc_zexe::coin::*;

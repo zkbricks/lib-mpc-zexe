@@ -249,7 +249,7 @@ mod tests {
             ];
 
             let coin = JZRecord::<8>::new(&crs, &fields, &blind.to_vec());
-            coins.push(coin);
+            coins.push(coin.fields());
 
         }
 

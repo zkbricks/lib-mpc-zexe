@@ -18,7 +18,7 @@ pub enum AppId {
 	TRADE = 3,
 }
 
-type Coin<F> = [F; NUM_FIELDS];
+pub type Coin<F> = [F; NUM_FIELDS];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoinBs58 {

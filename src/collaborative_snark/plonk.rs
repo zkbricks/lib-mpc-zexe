@@ -15,6 +15,7 @@ use ark_bls12_377::Bls12_377;
 
 use crate::utils;
 use crate::record_commitment::*;
+use crate::coin::*;
 use super::kzg;
 
 type Curve = ark_bls12_377::Bls12_377;
@@ -59,20 +60,20 @@ pub struct PlonkProof {
 
 pub fn plonk_prove<const N: usize>(
     crs: &JZKZGCommitmentParams<N>,
-    input_coins: &[JZRecord<N>],
-    output_coins: &[JZRecord<N>],
+    input_coins: &[Coin<F>],
+    output_coins: &[Coin<F>],
     prover_fn: ProverFnT
 ) -> PlonkProof {
     let kzg_crs = kzg_crs(crs);
 
     let input_coins_poly = input_coins
         .iter()
-        .map(|x| record_poly::<N>(x))
+        .map(|coin| coin_poly::<N>(coin))
         .collect::<Vec<DensePolynomial<F>>>();
 
     let output_coins_poly = output_coins
         .iter()
-        .map(|x| record_poly::<N>(x))
+        .map(|coin| coin_poly::<N>(coin))
         .collect::<Vec<DensePolynomial<F>>>();
 
     // compute the commitments
@@ -268,10 +269,10 @@ fn kzg_crs<const N: usize>(
 
 }
 
-fn record_poly<const N: usize>(record: &JZRecord<N>) -> DensePolynomial<F> {    
+fn coin_poly<const N: usize>(coin: &Coin<F>) -> DensePolynomial<F> {    
     //powers of nth root of unity
     let domain = Radix2EvaluationDomain::<F>::new(N).unwrap();
-    let eval_form = Evaluations::from_vec_and_domain(record.fields().to_vec(), domain);
+    let eval_form = Evaluations::from_vec_and_domain(coin.to_vec(), domain);
     //interpolated polynomial over the n points
     eval_form.interpolate()
 }

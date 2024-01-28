@@ -428,8 +428,8 @@ mod tests {
 
         let proof = plonk_prove(
             &crs, 
-            vec![local_proof.spent_coins[0].clone()].as_slice(), 
-            vec![new_coin].as_slice(),
+            vec![local_proof.spent_coins[0].fields().clone()].as_slice(), 
+            vec![new_coin.fields()].as_slice(),
             super::mpc_prover::<8>
         );
 
