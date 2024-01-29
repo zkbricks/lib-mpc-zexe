@@ -1,12 +1,12 @@
 use reqwest::{Client, Error, Response};
 use serde::{Deserialize, Serialize};
-use lib_mpc_zexe::coin::*;
-use lib_mpc_zexe::record_commitment::*;
 use rand_chacha::rand_core::SeedableRng;
 use rand::RngCore;
-use ark_serialize::CanonicalSerialize;
 
-type F = ark_bls12_377::Fr;
+use lib_mpc_zexe::coin::*;
+use lib_mpc_zexe::record_commitment::*;
+use lib_mpc_zexe::encoding::*;
+
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct Order {
@@ -111,23 +111,6 @@ async fn main() -> Result<(), Error> {
     perform_lottery().await?;
 
     Ok(())
-}
-
-fn coin_to_bs58(coin: &Coin<F>) -> CoinBs58 {
-    CoinBs58 { fields: 
-        coin
-        .iter()
-        .map(|f| encode_f_as_bs58_str(f))
-        .collect::<Vec<_>>()
-        .try_into()
-        .unwrap()
-    }
-}
-
-fn encode_f_as_bs58_str(value: &F) -> String {
-    let mut buffer: Vec<u8> = Vec::new();
-    value.serialize_compressed(&mut buffer).unwrap();
-    bs58::encode(buffer).into_string()
 }
 
 fn alice_key() -> ([u8; 32], [u8; 31]) {

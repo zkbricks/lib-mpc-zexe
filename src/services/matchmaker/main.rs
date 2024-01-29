@@ -2,8 +2,10 @@ use actix_web::{web, App, HttpServer};
 use reqwest::Client;
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
-use lib_mpc_zexe::coin::*;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+
+use lib_mpc_zexe::coin::*;
+use lib_mpc_zexe::encoding::*;
 
 type F = ark_bls12_377::Fr;
 
@@ -23,7 +25,6 @@ struct LotteryTransaction {
     input_coins: Vec<CoinBs58>,
     output_coin: CoinBs58,
 }
-
 
 type AppStateType = Vec<Order>;
 

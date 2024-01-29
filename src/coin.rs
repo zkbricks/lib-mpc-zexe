@@ -1,5 +1,3 @@
-use serde::{Deserialize, Serialize};
-
 pub const NUM_FIELDS: usize = 8;
 
 pub const ENTROPY: usize = 0;
@@ -19,8 +17,3 @@ pub enum AppId {
 }
 
 pub type Coin<F> = [F; NUM_FIELDS];
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CoinBs58 {
-	pub fields: [String; NUM_FIELDS],
-}
