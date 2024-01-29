@@ -2,15 +2,18 @@ use actix_web::{web, App, HttpServer};
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use rand_chacha::rand_core::SeedableRng;
+use reqwest::Client;
 
-use ark_ff::Field;
+use ark_ec::pairing::*;
 use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
 
 use lib_mpc_zexe::coin::*;
 use lib_mpc_zexe::record_commitment::JZKZGCommitmentParams;
 use lib_mpc_zexe::collaborative_snark::plonk::*;
 
+type Curve = ark_bls12_377::Bls12_377;
 type F = ark_bls12_377::Fr;
+type G1Affine = <Curve as Pairing>::G1Affine;
 
 mod lottery_prover;
 
@@ -18,6 +21,114 @@ mod lottery_prover;
 struct LotteryTransaction {
     input_coins: Vec<CoinBs58>,
     output_coin: CoinBs58,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlonkProofBs58 {
+    // commitments to input coins data structures
+    pub input_coins_com: Vec<String>,
+    // commitments to output coins data structures
+    pub output_coins_com: Vec<String>,
+    // commitment to quotient polynomial
+    pub quotient_com: String,
+    // commitments to additional polynomials
+    pub additional_com: Vec<String>,
+
+    // openings of input coin polyomials at r
+    pub input_coins_opening: Vec<String>,
+    // openings of output coin polyomials at r
+    pub output_coins_opening: Vec<String>,
+    // opening of quotient polynomial at r
+    pub quotient_opening: String,
+    // openings of additional polynomials at r
+    pub additional_opening: Vec<String>,
+
+    pub input_coins_opening_proof: Vec<String>,
+    pub output_coins_opening_proof: Vec<String>,
+    pub quotient_opening_proof: String,
+    pub additional_opening_proof: Vec<String>,
+}
+
+fn proof_to_bs58(proof: &PlonkProof) -> PlonkProofBs58 {
+    let input_coins_com = proof.input_coins_com
+        .iter()
+        .map(|c| encode_g1_as_bs58_str(c))
+        .collect::<Vec<String>>();
+
+    let output_coins_com = proof.output_coins_com
+        .iter()
+        .map(|c| encode_g1_as_bs58_str(c))
+        .collect::<Vec<String>>();
+
+    let quotient_com = encode_g1_as_bs58_str(&proof.quotient_com);
+
+    let additional_com = proof.additional_com
+        .iter()
+        .map(|c| encode_g1_as_bs58_str(c))
+        .collect::<Vec<String>>();
+
+    let input_coins_opening = proof.input_coins_opening
+        .iter()
+        .map(|c| encode_f_as_bs58_str(c))
+        .collect::<Vec<String>>();
+
+    let output_coins_opening = proof.output_coins_opening
+        .iter()
+        .map(|c| encode_f_as_bs58_str(c))
+        .collect::<Vec<String>>();
+
+    let quotient_opening = encode_f_as_bs58_str(&proof.quotient_opening);
+
+    let additional_opening = proof.additional_opening
+        .iter()
+        .map(|c| encode_f_as_bs58_str(c))
+        .collect::<Vec<String>>();
+
+    let input_coins_opening_proof = proof.input_coins_opening_proof
+        .iter()
+        .map(|c| encode_g1_as_bs58_str(c))
+        .collect::<Vec<String>>();
+
+    let output_coins_opening_proof = proof.output_coins_opening_proof
+        .iter()
+        .map(|c| encode_g1_as_bs58_str(c))
+        .collect::<Vec<String>>();
+
+    let quotient_opening_proof = encode_g1_as_bs58_str(&proof.quotient_opening_proof);
+
+    let additional_opening_proof = proof.additional_opening_proof
+        .iter()
+        .map(|c| encode_g1_as_bs58_str(c))
+        .collect::<Vec<String>>();
+
+    PlonkProofBs58 {
+        input_coins_com,
+        output_coins_com,
+        quotient_com,
+        additional_com,
+
+        input_coins_opening,
+        output_coins_opening,
+        quotient_opening,
+        additional_opening,
+
+        input_coins_opening_proof,
+        output_coins_opening_proof,
+        quotient_opening_proof,
+        additional_opening_proof,
+    }
+}
+
+fn encode_f_as_bs58_str(value: &F) -> String {
+    let mut buffer: Vec<u8> = Vec::new();
+    value.serialize_compressed(&mut buffer).unwrap();
+    bs58::encode(buffer).into_string()
+}
+
+fn encode_g1_as_bs58_str(value: &G1Affine) -> String {
+    let mut serialized_msg: Vec<u8> = Vec::new();
+    value.serialize_compressed(&mut serialized_msg).unwrap();
+    bs58::encode(serialized_msg).into_string()
 }
 
 type AppStateType = Vec<LotteryTransaction>;
@@ -33,32 +144,32 @@ fn extract_crs() -> JZKZGCommitmentParams<8> {
     JZKZGCommitmentParams::<8>::trusted_setup(&mut rng)
 }
 
+fn coin_from_bs58(coin: &CoinBs58) -> Coin<F> {
+    let fields: [F; 8] = coin.fields
+        .iter()
+        .map(|s| decode_bs58_str_as_f(s))
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
+
+    fields
+}
 
 async fn submit_lottery_tx(
     data: web::Data<GlobalAppState>,
     lottery_tx: web::Json<LotteryTransaction>
 ) -> String {
-    let mut db = data.db.lock().unwrap();
+    let mut _db = data.db.lock().unwrap();
     let tx = lottery_tx.into_inner();
 
     let crs = extract_crs();
 
     let f_input_coins: Vec<[F; 8]> = tx.input_coins
-    .iter()
-    .map(|c| c.fields
-            .iter()
-            .map(|s| decode_bs58_str_as_f(s))
-            .collect::<Vec<F>>()
-            .try_into()
-            .unwrap())
-    .collect::<Vec<_>>();
-
-    let f_output_coin: [F; 8] = tx.output_coin.fields
         .iter()
-        .map(|s| decode_bs58_str_as_f(s))
-        .collect::<Vec<F>>()
-        .try_into()
-        .unwrap();
+        .map(|c| coin_from_bs58(c))
+        .collect::<Vec<_>>();
+
+    let f_output_coin = coin_from_bs58(&tx.output_coin);
     
     let proof = plonk_prove(
         &crs, 
@@ -67,17 +178,21 @@ async fn submit_lottery_tx(
         lottery_prover::prover::<8>
     );
 
-    plonk_verify(
-        &crs,
-        &proof,
-        lottery_prover::verifier::<8>
-    );
-
-    println!("Proof verified!");
+    let proof_bs58 = proof_to_bs58(&proof);
+    let client = Client::new();
+    let response = client.post("http://127.0.0.1:8082/lottery")
+        .json(&proof_bs58)
+        .send()
+        .await
+        .unwrap();
     
-    (*db).push(tx.clone());
+    if response.status().is_success() {
+        println!("Lottery executed successfully");
+        "success".to_string()
+    } else {
+        "failure".to_string()
+    }
 
-    "success".to_string()
 }
 
 fn decode_bs58_str_as_f(msg: &String) -> F {

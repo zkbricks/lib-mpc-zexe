@@ -95,20 +95,12 @@ async fn main() -> Result<(), Error> {
         ];
 
         let coin = JZRecord::<8>::new(&crs, &fields, &blind.to_vec());
-        coins.push(coin);
+        coins.push(coin.fields());
     }
 
     let bs58_coins = coins
         .iter()
-        .map(|c| CoinBs58 { fields :
-                c.fields()
-                .iter()
-                .map(|f| encode_f_as_bs58_str(f))
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap()
-            }
-        )
+        .map(|coin| coin_to_bs58(coin))
         .collect::<Vec<_>>();
     
     list_orders().await?;
@@ -119,6 +111,17 @@ async fn main() -> Result<(), Error> {
     perform_lottery().await?;
 
     Ok(())
+}
+
+fn coin_to_bs58(coin: &Coin<F>) -> CoinBs58 {
+    CoinBs58 { fields: 
+        coin
+        .iter()
+        .map(|f| encode_f_as_bs58_str(f))
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap()
+    }
 }
 
 fn encode_f_as_bs58_str(value: &F) -> String {

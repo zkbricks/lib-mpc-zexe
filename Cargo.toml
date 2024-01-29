@@ -16,6 +16,10 @@ name = "prover"
 path = "src/services/prover/main.rs"
 
 [[bin]]
+name = "verifier"
+path = "src/services/verifier/main.rs"
+
+[[bin]]
 name = "client"
 path = "src/services/client/main.rs"
 

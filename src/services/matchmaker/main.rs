@@ -1,6 +1,5 @@
 use actix_web::{web, App, HttpServer};
-use bs58::encode;
-use reqwest::{Client, Error, Response};
+use reqwest::Client;
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use lib_mpc_zexe::coin::*;
@@ -61,9 +60,7 @@ fn encode_f_as_bs58_str(value: &F) -> String {
 }
 
 async fn perform_lottery(data: web::Data<GlobalAppState>) -> String {
-    println!("within perform_lottery");
-
-    let mut db = data.db.lock().unwrap();
+    let db = data.db.lock().unwrap();
 
     let input_coins = (*db).to_owned();
     let mut output_coin = input_coins[0].clone();
