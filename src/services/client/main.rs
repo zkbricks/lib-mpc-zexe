@@ -1,4 +1,5 @@
-use reqwest::{Client, Error, Response};
+use ark_serialize::CanonicalSerialize;
+use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
 use rand_chacha::rand_core::SeedableRng;
 use std::borrow::Borrow;
@@ -21,8 +22,6 @@ use lib_mpc_zexe::coin::*;
 
 pub type ConstraintF = ark_bw6_761::Fr;
 
-use lib_mpc_zexe::coin::*;
-use lib_mpc_zexe::record_commitment::*;
 use lib_mpc_zexe::encoding::*;
 
 
@@ -30,6 +29,7 @@ use lib_mpc_zexe::encoding::*;
 struct Order {
     id: i32,
     coin: CoinBs58,
+    groth_proof: String
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -110,12 +110,6 @@ fn setup_witness() -> SpendCircuit {
 
     let prf_params = JZPRFParams::trusted_setup(&mut rng);
     let crs = JZKZGCommitmentParams::<8>::trusted_setup(&mut rng);
-
-    let mut entropy = [0u8; 24];
-    rng.fill_bytes(&mut entropy);
-
-    let mut blind = [0u8; 24];
-    rng.fill_bytes(&mut blind);
 
     let mut coins = Vec::new();
     let mut records = Vec::new();
@@ -353,6 +347,12 @@ async fn main() -> reqwest::Result<()> {
     let elapsed = now.elapsed();
     println!("Prover time: {:.2?}", elapsed);
 
+    let proof_serialized = {
+        let mut buffer: Vec<u8> = Vec::new();
+        proof.serialize_compressed(&mut buffer).unwrap();
+        bs58::encode(buffer).into_string()
+    };
+
     let valid_proof = Groth16::<BW6_761>::verify(&vk, &public_input, &proof).unwrap();
     assert!(valid_proof);
 
@@ -362,9 +362,21 @@ async fn main() -> reqwest::Result<()> {
         .collect::<Vec<_>>();
     
     list_orders().await?;
-    submit_order(Order { id: 0, coin: bs58_coins[0].clone() }).await?;
+    submit_order(
+        Order {
+            id: 0,
+            coin: bs58_coins[0].clone(),
+            groth_proof: proof_serialized.clone()
+        }
+    ).await?;
     list_orders().await?;
-    submit_order(Order { id: 1, coin: bs58_coins[1].clone() }).await?;
+    submit_order(
+        Order {
+            id: 1,
+            coin: bs58_coins[1].clone(),
+            groth_proof: proof_serialized.clone()
+        }
+    ).await?;
     list_orders().await?;
     perform_lottery().await?;
 

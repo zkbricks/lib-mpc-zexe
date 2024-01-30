@@ -297,16 +297,6 @@ fn spending() {
         nullifier
     ];
 
-    // public_input.extend_from_slice(
-    //     circuit
-    //         .prf_instance_nullifier
-    //         .evaluate()
-    //         .iter()
-    //         .map(|x| ConstraintF::from(*x))
-    //         .collect::<Vec<ConstraintF>>()
-    //         .as_slice()
-    // );
-
     let now = std::time::Instant::now();
     let proof = Groth16::<BW6_761>::prove(&pk, circuit, &mut rng).unwrap();
     let elapsed = now.elapsed();
