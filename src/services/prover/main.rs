@@ -6,11 +6,11 @@ use reqwest::Client;
 
 use lib_mpc_zexe::record_commitment::JZKZGCommitmentParams;
 use lib_mpc_zexe::collaborative_snark::plonk::*;
+use lib_mpc_zexe::apps;
 use lib_mpc_zexe::encoding::*;
 
 type F = ark_bls12_377::Fr;
 
-mod lottery_prover;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct LotteryTransaction {
@@ -51,7 +51,7 @@ async fn submit_lottery_tx(
         &crs, 
         f_input_coins.as_slice(), 
         [f_output_coin].as_slice(),
-        lottery_prover::prover::<8>
+        apps::lottery::prover::<8>
     );
 
     let proof_bs58 = proof_to_bs58(&proof);

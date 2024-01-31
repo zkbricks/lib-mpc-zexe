@@ -4,9 +4,8 @@ use rand_chacha::rand_core::SeedableRng;
 
 use lib_mpc_zexe::record_commitment::JZKZGCommitmentParams;
 use lib_mpc_zexe::collaborative_snark::plonk::*;
+use lib_mpc_zexe::apps;
 use lib_mpc_zexe::encoding::*;
-
-mod lottery_verifier;
 
 type AppStateType = Vec<PlonkProofBs58>;
 
@@ -33,7 +32,7 @@ async fn verify_lottery_tx(
     plonk_verify(
         &crs,
         &proof_from_bs58(&proof),
-        lottery_verifier::verifier::<8>
+        apps::lottery::verifier::<8>
     );
 
     println!("Proof verified!");

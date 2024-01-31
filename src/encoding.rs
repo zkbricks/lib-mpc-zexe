@@ -204,6 +204,8 @@ pub fn proof_to_bs58(proof: &PlonkProof) -> PlonkProofBs58 {
     }
 }
 
+pub type GrothBs58 = String;
+
 fn decode_bs58_str_as_f(msg: &String) -> F {
     let buf: Vec<u8> = bs58::decode(msg).into_vec().unwrap();
     F::deserialize_compressed(buf.as_slice()).unwrap()
