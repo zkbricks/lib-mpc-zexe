@@ -11,11 +11,23 @@ use lib_mpc_zexe::encoding::*;
 
 type F = ark_bls12_377::Fr;
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct Order {
+    id: i32,
+    coin: CoinBs58,
+    local_proof: GrothProofBs58
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct LotteryTransaction {
-    input_coins: Vec<CoinBs58>,
+    input_orders: Vec<Order>,
     output_coin: CoinBs58,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct LotteryProof {
+    local_proofs: Vec<GrothProofBs58>,
+    collaborative_prooof: PlonkProofBs58
 }
 
 type AppStateType = Vec<LotteryTransaction>;
@@ -40,9 +52,9 @@ async fn submit_lottery_tx(
 
     let crs = extract_crs();
 
-    let f_input_coins: Vec<[F; 8]> = tx.input_coins
+    let f_input_coins: Vec<[F; 8]> = tx.input_orders
         .iter()
-        .map(|c| coin_from_bs58(c))
+        .map(|o| coin_from_bs58(&o.coin))
         .collect::<Vec<_>>();
 
     let f_output_coin = coin_from_bs58(&tx.output_coin);
@@ -54,10 +66,20 @@ async fn submit_lottery_tx(
         apps::lottery::prover::<8>
     );
 
-    let proof_bs58 = proof_to_bs58(&proof);
+    let collaborative_proof_bs58 = proof_to_bs58(&proof);
+    let local_proofs = tx.input_orders
+        .iter()
+        .map(|o| o.local_proof.clone())
+        .collect::<Vec<_>>();
+
+    let lottery_proof = LotteryProof {
+        local_proofs: local_proofs,
+        collaborative_prooof: collaborative_proof_bs58
+    };
+
     let client = Client::new();
     let response = client.post("http://127.0.0.1:8082/lottery")
-        .json(&proof_bs58)
+        .json(&lottery_proof)
         .send()
         .await
         .unwrap();

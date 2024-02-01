@@ -1,8 +1,10 @@
+use ark_bw6_761::BW6_761;
 use serde::{Deserialize, Serialize};
 
 use ark_std::io::Cursor;
 use ark_ec::pairing::*;
 use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
+use ark_groth16::*;
 
 use crate::coin::*;
 use crate::collaborative_snark::plonk::*;
@@ -11,7 +13,8 @@ use crate::collaborative_snark::plonk::*;
 type Curve = ark_bls12_377::Bls12_377;
 type F = ark_bls12_377::Fr;
 type G1Affine = <Curve as Pairing>::G1Affine;
-
+type ConstraintF = ark_bw6_761::Fr;
+type ConstraintPairing = ark_bw6_761::BW6_761;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoinBs58 {
@@ -204,7 +207,48 @@ pub fn proof_to_bs58(proof: &PlonkProof) -> PlonkProofBs58 {
     }
 }
 
-pub type GrothBs58 = String;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrothProofBs58 {
+    pub proof: String,
+    pub public_inputs: Vec<String>,
+}
+
+pub fn groth_proof_to_bs58(
+    proof: &Proof<ConstraintPairing>,
+    public_inputs: &Vec<ConstraintF>
+) -> GrothProofBs58 {
+    let public_inputs = public_inputs
+        .iter()
+        .map(|f| encode_constraintf_as_bs58_str(f))
+        .collect::<Vec<String>>();
+
+    let mut buffer: Vec<u8> = Vec::new();
+    proof.serialize_compressed(&mut buffer).unwrap();
+    let proof = bs58::encode(buffer).into_string();
+
+    GrothProofBs58 {
+        proof,
+        public_inputs,
+    }
+}
+
+pub fn groth_proof_from_bs58(proof: &GrothProofBs58) -> 
+    (Proof<ConstraintPairing>, Vec<ConstraintF>) {
+    let public_inputs = proof.public_inputs
+        .iter()
+        .map(|s| decode_bs58_str_as_constraintf(s))
+        .collect::<Vec<ConstraintF>>();
+
+    let buf: Vec<u8> = bs58::decode(proof.proof.clone()).into_vec().unwrap();
+    let proof = Proof::<BW6_761>::deserialize_compressed(buf.as_slice()).unwrap();
+
+    (proof, public_inputs)
+}
+
+fn decode_bs58_str_as_constraintf(msg: &String) -> ConstraintF {
+    let buf: Vec<u8> = bs58::decode(msg).into_vec().unwrap();
+    ConstraintF::deserialize_compressed(buf.as_slice()).unwrap()
+}
 
 fn decode_bs58_str_as_f(msg: &String) -> F {
     let buf: Vec<u8> = bs58::decode(msg).into_vec().unwrap();
@@ -214,6 +258,12 @@ fn decode_bs58_str_as_f(msg: &String) -> F {
 fn decode_bs58_str_as_g1(msg: &String) -> G1Affine {
     let decoded = bs58::decode(msg).into_vec().unwrap();
     G1Affine::deserialize_compressed(&mut Cursor::new(decoded)).unwrap()
+}
+
+fn encode_constraintf_as_bs58_str(value: &ConstraintF) -> String {
+    let mut buffer: Vec<u8> = Vec::new();
+    value.serialize_compressed(&mut buffer).unwrap();
+    bs58::encode(buffer).into_string()
 }
 
 fn encode_f_as_bs58_str(value: &F) -> String {

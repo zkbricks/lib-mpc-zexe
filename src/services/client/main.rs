@@ -1,13 +1,10 @@
-use ark_serialize::CanonicalSerialize;
 use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
 use rand_chacha::rand_core::SeedableRng;
+use std::time::Instant;
 
 use ark_ff::{*};
-use ark_bw6_761::{*};
 use ark_std::{*, rand::RngCore};
-use ark_groth16::Groth16;
-use ark_snark::SNARK;
 
 use lib_mpc_zexe::coin::*;
 use lib_mpc_zexe::apps::lottery;
@@ -20,7 +17,7 @@ use lib_mpc_zexe::encoding::*;
 struct Order {
     id: i32,
     coin: CoinBs58,
-    groth_proof: String
+    local_proof: GrothProofBs58
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -120,22 +117,17 @@ fn airdrop() -> Vec<JZRecord<8>> {
 
 #[tokio::main]
 async fn main() -> reqwest::Result<()> {
-    let sk = &alice_key().0;
-    let (pk, vk) = lottery::circuit_setup();
-    println!("circuit_setup complete");
+    let (pk, _vk) = lottery::circuit_setup();
 
     let coins = airdrop();
-    let (proof, public_inputs) = lottery::generate_groth_proof(&pk, &coins, sk);
-    println!("generate_groth_proof complete");
 
-    let proof_serialized = {
-        let mut buffer: Vec<u8> = Vec::new();
-        proof.serialize_compressed(&mut buffer).unwrap();
-        bs58::encode(buffer).into_string()
-    };
+    let now = Instant::now();
+    let (alice_proof, alice_public_inputs) = lottery::generate_groth_proof(&pk, &coins, 0, &alice_key().0);
+    println!("proof generated in {}.{} secs",
+        now.elapsed().as_secs(), now.elapsed().subsec_millis()
+    );
 
-    let valid_proof = Groth16::<BW6_761>::verify(&vk, &public_inputs, &proof).unwrap();
-    assert!(valid_proof);
+    let (bob_proof, bob_public_inputs) = lottery::generate_groth_proof(&pk, &coins, 1, &bob_key().0);
 
     let bs58_coins = coins
         .iter()
@@ -147,7 +139,7 @@ async fn main() -> reqwest::Result<()> {
         Order {
             id: 0,
             coin: bs58_coins[0].clone(),
-            groth_proof: proof_serialized.clone()
+            local_proof: groth_proof_to_bs58(&alice_proof, &alice_public_inputs)
         }
     ).await?;
     list_orders().await?;
@@ -155,7 +147,7 @@ async fn main() -> reqwest::Result<()> {
         Order {
             id: 1,
             coin: bs58_coins[1].clone(),
-            groth_proof: proof_serialized.clone()
+            local_proof: groth_proof_to_bs58(&bob_proof, &bob_public_inputs)
         }
     ).await?;
     list_orders().await?;

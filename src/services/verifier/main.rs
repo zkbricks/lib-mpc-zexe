@@ -1,13 +1,24 @@
 use actix_web::{web, App, HttpServer};
+use ark_bw6_761::BW6_761;
+use ark_groth16::*;
+use ark_snark::SNARK;
 use std::sync::Mutex;
 use rand_chacha::rand_core::SeedableRng;
+use serde::{Deserialize, Serialize};
+use std::time::Instant;
 
 use lib_mpc_zexe::record_commitment::JZKZGCommitmentParams;
 use lib_mpc_zexe::collaborative_snark::plonk::*;
 use lib_mpc_zexe::apps;
 use lib_mpc_zexe::encoding::*;
 
-type AppStateType = Vec<PlonkProofBs58>;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct LotteryProof {
+    local_proofs: Vec<GrothProofBs58>,
+    collaborative_prooof: PlonkProofBs58
+}
+
+type AppStateType = Vec<LotteryProof>;
 
 struct GlobalAppState {
     db: Mutex<AppStateType>, // <- Mutex is necessary to mutate safely across threads
@@ -20,23 +31,47 @@ fn extract_crs() -> JZKZGCommitmentParams<8> {
     JZKZGCommitmentParams::<8>::trusted_setup(&mut rng)
 }
 
+fn extract_vk() -> VerifyingKey<BW6_761> {
+    let (_pk, vk) = apps::lottery::circuit_setup();
+    vk
+}
+
 async fn verify_lottery_tx(
     data: web::Data<GlobalAppState>,
-    proof: web::Json<PlonkProofBs58>
+    proof: web::Json<LotteryProof>
 ) -> String {
     let mut db = data.db.lock().unwrap();
 
     let crs = extract_crs();
+    let vk = extract_vk();
+
     let proof = proof.into_inner();
 
+    let now = Instant::now();
+    // verify the local proofs
+    for p in &proof.local_proofs {
+        let (groth_proof, public_inputs) = groth_proof_from_bs58(&p);
+
+        let valid_proof = Groth16::<BW6_761>::verify(
+            &vk,
+            &public_inputs,
+            &groth_proof
+        ).unwrap();
+        assert!(valid_proof);
+    }
+
+    // verify the collaborative proof
     plonk_verify(
         &crs,
-        &proof_from_bs58(&proof),
+        &proof_from_bs58(&proof.collaborative_prooof),
         apps::lottery::verifier::<8>
     );
-
-    println!("Proof verified!");
     
+    println!("proof verified in {}.{} secs", 
+        now.elapsed().as_secs(),
+        now.elapsed().subsec_millis()
+    );
+
     (*db).push(proof.clone());
 
     "success".to_string()

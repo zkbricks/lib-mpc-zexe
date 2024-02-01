@@ -340,6 +340,7 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
 pub fn generate_groth_proof(
     pk: &ProvingKey<BW6_761>,
     coins: &Vec<JZRecord<8>>,
+    coin_index: usize,
     sk: &[u8; 32]
 ) -> (Proof<BW6_761>, Vec<ConstraintF>) {
     let seed = [0u8; 32];
@@ -361,12 +362,12 @@ pub fn generate_groth_proof(
             &prf_params, &[0u8; 32], sk
         ),
         prf_instance_nullifier: JZPRFInstance::new(
-            &prf_params, coins[0].fields[RHO].as_slice(), sk
+            &prf_params, coins[coin_index].fields[RHO].as_slice(), sk
         ),
-        record: coins[0].clone(),
+        record: coins[coin_index].clone(),
         coins: coins.iter().map(|coin| coin.fields()).collect(),
         db: db,
-        index: 0,
+        index: coin_index,
     };
 
     let blinded_com = circuit.record.blinded_commitment().into_affine();

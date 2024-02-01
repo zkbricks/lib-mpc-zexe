@@ -13,6 +13,7 @@ type F = ark_bls12_377::Fr;
 struct Order {
     id: i32,
     coin: CoinBs58,
+    local_proof: GrothProofBs58
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -22,7 +23,7 @@ struct Orders {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct LotteryTransaction {
-    input_coins: Vec<CoinBs58>,
+    input_orders: Vec<Order>,
     output_coin: CoinBs58,
 }
 
@@ -71,10 +72,7 @@ async fn perform_lottery(data: web::Data<GlobalAppState>) -> String {
     );
 
     let lottery_tx = LotteryTransaction {
-        input_coins: input_coins
-            .iter()
-            .map(|c| c.coin.clone())
-            .collect::<Vec<_>>(),
+        input_orders: input_coins.clone(),
         output_coin: output_coin.coin.clone(),
     };
 
