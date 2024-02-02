@@ -131,7 +131,7 @@ async fn main() -> reqwest::Result<()> {
 
     let bs58_coins = coins
         .iter()
-        .map(|coin| coin_to_bs58(&coin.fields()))
+        .map(|coin| coin_to_bs58(&coin.blinded_fields()))
         .collect::<Vec<_>>();
     
     list_orders().await?;

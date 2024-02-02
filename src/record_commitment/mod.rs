@@ -121,4 +121,18 @@ impl<const N: usize> JZRecord<N> {
         }
         fields
     }
+
+    pub fn blinded_fields(&self) -> [F; N] {
+        let mut fields = self.fields();
+
+        // convert blind to a field element
+        let blind = F::from(
+            BigInt::<4>::from_bits_le(
+                utils::bytes_to_bits(&self.blind).as_slice()
+            )
+        );
+
+        fields[0] += blind;
+        fields
+    }
 }
