@@ -14,8 +14,8 @@ type F = ark_bls12_377::Fr;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct Order {
     id: i32,
-    coin: CoinBs58,
-    local_proof: GrothProofBs58
+    input_coin: CoinBs58,
+    input_coin_local_proof: GrothProofBs58
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,7 +54,7 @@ async fn submit_lottery_tx(
 
     let f_input_coins: Vec<[F; 8]> = tx.input_orders
         .iter()
-        .map(|o| coin_from_bs58(&o.coin))
+        .map(|o| coin_from_bs58(&o.input_coin))
         .collect::<Vec<_>>();
 
     let f_output_coin = coin_from_bs58(&tx.output_coin);
@@ -69,7 +69,7 @@ async fn submit_lottery_tx(
     let collaborative_proof_bs58 = proof_to_bs58(&proof);
     let local_proofs = tx.input_orders
         .iter()
-        .map(|o| o.local_proof.clone())
+        .map(|o| o.input_coin_local_proof.clone())
         .collect::<Vec<_>>();
 
     let lottery_proof = LotteryProof {

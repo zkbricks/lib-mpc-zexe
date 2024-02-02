@@ -12,8 +12,8 @@ type F = ark_bls12_377::Fr;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct Order {
     id: i32,
-    coin: CoinBs58,
-    local_proof: GrothProofBs58
+    input_coin: CoinBs58,
+    input_coin_local_proof: GrothProofBs58
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -65,15 +65,15 @@ async fn perform_lottery(data: web::Data<GlobalAppState>) -> String {
     let db = data.db.lock().unwrap();
 
     let input_coins = (*db).to_owned();
-    let mut output_coin = input_coins[0].clone();
-    output_coin.coin.fields[AMOUNT] = encode_f_as_bs58_str(
-        &(decode_bs58_str_as_f(&input_coins[0].coin.fields[AMOUNT]) +
-        decode_bs58_str_as_f(&input_coins[1].coin.fields[AMOUNT]))
+    let mut output_coin = input_coins[0].input_coin.clone();
+    output_coin.fields[AMOUNT] = encode_f_as_bs58_str(
+        &(decode_bs58_str_as_f(&input_coins[0].input_coin.fields[AMOUNT]) +
+        decode_bs58_str_as_f(&input_coins[1].input_coin.fields[AMOUNT]))
     );
 
     let lottery_tx = LotteryTransaction {
         input_orders: input_coins.clone(),
-        output_coin: output_coin.coin.clone(),
+        output_coin: output_coin.clone(),
     };
 
     let client = Client::new();

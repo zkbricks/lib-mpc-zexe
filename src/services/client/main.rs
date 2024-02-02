@@ -16,8 +16,8 @@ use lib_mpc_zexe::encoding::*;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct Order {
     id: i32,
-    coin: CoinBs58,
-    local_proof: GrothProofBs58
+    input_coin: CoinBs58,
+    input_coin_local_proof: GrothProofBs58
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -138,16 +138,16 @@ async fn main() -> reqwest::Result<()> {
     submit_order(
         Order {
             id: 0,
-            coin: bs58_coins[0].clone(),
-            local_proof: groth_proof_to_bs58(&alice_proof, &alice_public_inputs)
+            input_coin: bs58_coins[0].clone(),
+            input_coin_local_proof: groth_proof_to_bs58(&alice_proof, &alice_public_inputs)
         }
     ).await?;
     list_orders().await?;
     submit_order(
         Order {
             id: 1,
-            coin: bs58_coins[1].clone(),
-            local_proof: groth_proof_to_bs58(&bob_proof, &bob_public_inputs)
+            input_coin: bs58_coins[1].clone(),
+            input_coin_local_proof: groth_proof_to_bs58(&bob_proof, &bob_public_inputs)
         }
     ).await?;
     list_orders().await?;
