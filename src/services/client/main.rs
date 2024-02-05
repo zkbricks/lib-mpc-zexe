@@ -17,7 +17,8 @@ use lib_mpc_zexe::encoding::*;
 struct Order {
     id: i32,
     input_coin: CoinBs58,
-    input_coin_local_proof: GrothProofBs58
+    input_coin_local_proof: GrothProofBs58,
+    placeholder_output_coin: CoinBs58,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -113,7 +114,32 @@ fn airdrop() -> Vec<JZRecord<8>> {
     coins
 }
 
+fn create_output_coin(template: &JZRecord<8>) -> JZRecord<8> {
+    let seed = [0u8; 32];
+    let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
 
+    let crs = JZKZGCommitmentParams::<8>::trusted_setup(&mut rng);
+
+    let mut entropy = [0u8; 31];
+    rng.fill_bytes(&mut entropy);
+
+    let mut amount = [0u8; 31];
+    rng.fill_bytes(&mut amount);
+
+    let fields: [Vec<u8>; 8] = 
+    [
+        entropy.to_vec(),
+        template.fields[OWNER].clone(), //owner
+        template.fields[ASSET_ID].clone(), //asset id
+        amount.to_vec(), //amount
+        template.fields[APP_ID].clone(), //app id
+        vec![0u8; 31],
+        vec![0u8; 31],
+        vec![0u8; 31],
+    ];
+
+    JZRecord::<8>::new(&crs, &fields, &[0u8; 31].to_vec())
+}
 
 #[tokio::main]
 async fn main() -> reqwest::Result<()> {
@@ -122,12 +148,14 @@ async fn main() -> reqwest::Result<()> {
     let coins = airdrop();
 
     let now = Instant::now();
-    let (alice_proof, alice_public_inputs) = lottery::generate_groth_proof(&pk, &coins, 0, &alice_key().0);
+    let (alice_proof, alice_public_inputs) =
+        lottery::generate_groth_proof(&pk, &coins, 0, &alice_key().0);
     println!("proof generated in {}.{} secs",
         now.elapsed().as_secs(), now.elapsed().subsec_millis()
     );
 
-    let (bob_proof, bob_public_inputs) = lottery::generate_groth_proof(&pk, &coins, 1, &bob_key().0);
+    let (bob_proof, bob_public_inputs) =
+        lottery::generate_groth_proof(&pk, &coins, 1, &bob_key().0);
 
     let bs58_coins = coins
         .iter()
@@ -137,17 +165,27 @@ async fn main() -> reqwest::Result<()> {
     list_orders().await?;
     submit_order(
         Order {
-            id: 0,
-            input_coin: bs58_coins[0].clone(),
-            input_coin_local_proof: groth_proof_to_bs58(&alice_proof, &alice_public_inputs)
+            id:
+                0,
+            input_coin:
+                bs58_coins[0].clone(),
+            input_coin_local_proof:
+                groth_proof_to_bs58(&alice_proof, &alice_public_inputs),
+            placeholder_output_coin:
+                coin_to_bs58(&create_output_coin(&coins[0]).fields())
         }
     ).await?;
     list_orders().await?;
     submit_order(
         Order {
-            id: 1,
-            input_coin: bs58_coins[1].clone(),
-            input_coin_local_proof: groth_proof_to_bs58(&bob_proof, &bob_public_inputs)
+            id:
+                1,
+            input_coin:
+                bs58_coins[1].clone(),
+            input_coin_local_proof:
+                groth_proof_to_bs58(&bob_proof, &bob_public_inputs),
+            placeholder_output_coin:
+                coin_to_bs58(&create_output_coin(&coins[1]).fields())
         }
     ).await?;
     list_orders().await?;

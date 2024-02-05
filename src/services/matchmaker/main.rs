@@ -2,18 +2,16 @@ use actix_web::{web, App, HttpServer};
 use reqwest::Client;
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
 use lib_mpc_zexe::coin::*;
 use lib_mpc_zexe::encoding::*;
-
-type F = ark_bls12_377::Fr;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct Order {
     id: i32,
     input_coin: CoinBs58,
-    input_coin_local_proof: GrothProofBs58
+    input_coin_local_proof: GrothProofBs58,
+    placeholder_output_coin: CoinBs58,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -50,30 +48,22 @@ async fn submit_order(data: web::Data<GlobalAppState>, order: web::Json<Order>) 
     "success".to_string()
 }
 
-fn decode_bs58_str_as_f(msg: &String) -> F {
-    let buf: Vec<u8> = bs58::decode(msg).into_vec().unwrap();
-    F::deserialize_compressed(buf.as_slice()).unwrap()
-}
-
-fn encode_f_as_bs58_str(value: &F) -> String {
-    let mut buffer: Vec<u8> = Vec::new();
-    value.serialize_compressed(&mut buffer).unwrap();
-    bs58::encode(buffer).into_string()
-}
-
 async fn perform_lottery(data: web::Data<GlobalAppState>) -> String {
     let db = data.db.lock().unwrap();
 
-    let input_coins = (*db).to_owned();
-    let mut output_coin = input_coins[0].input_coin.clone();
-    output_coin.fields[AMOUNT] = encode_f_as_bs58_str(
-        &(decode_bs58_str_as_f(&input_coins[0].input_coin.fields[AMOUNT]) +
-        decode_bs58_str_as_f(&input_coins[1].input_coin.fields[AMOUNT]))
-    );
+    let orders = (*db).to_owned();
+
+    let input_coin_0 = coin_from_bs58(&orders[0].input_coin);
+    let input_coin_1 = coin_from_bs58(&orders[1].input_coin);
+
+    //we will make order 0 the winner, thus rigging the lottery (doesnt matter)
+    let mut output_coin = coin_from_bs58(&orders[0].placeholder_output_coin);
+
+    output_coin[AMOUNT] = input_coin_0[AMOUNT] + input_coin_1[AMOUNT];
 
     let lottery_tx = LotteryTransaction {
-        input_orders: input_coins.clone(),
-        output_coin: output_coin.clone(),
+        input_orders: orders.clone(),
+        output_coin: coin_to_bs58(&output_coin),
     };
 
     let client = Client::new();

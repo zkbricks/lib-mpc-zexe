@@ -15,7 +15,8 @@ type F = ark_bls12_377::Fr;
 struct Order {
     id: i32,
     input_coin: CoinBs58,
-    input_coin_local_proof: GrothProofBs58
+    input_coin_local_proof: GrothProofBs58,
+    placeholder_output_coin: CoinBs58,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
