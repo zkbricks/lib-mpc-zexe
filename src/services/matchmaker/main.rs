@@ -19,16 +19,22 @@ struct Orders {
     orders: Vec<Order>,
 }
 
+/// describes the input from matchmaker to the prover
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct LotteryTransaction {
+    /// orders entering the lottery
     input_orders: Vec<Order>,
-    output_coin: CoinBs58,
+    /// which of the orders is the winner?
+    winner_index: u64,
+    /// the correction to the placeholder coin
+    amount_correction: FieldElementBs58,
 }
 
 type AppStateType = Vec<Order>;
 
+// a mutex is necessary to mutate safely across webserver threads
 struct GlobalAppState {
-    db: Mutex<AppStateType>, // <- Mutex is necessary to mutate safely across threads
+    db: Mutex<AppStateType>,
 }
 
 async fn debug(data: web::Data<GlobalAppState>) -> String {
@@ -57,13 +63,18 @@ async fn perform_lottery(data: web::Data<GlobalAppState>) -> String {
     let input_coin_1 = coin_from_bs58(&orders[1].input_coin);
 
     //we will make order 0 the winner, thus rigging the lottery (doesnt matter)
-    let mut output_coin = coin_from_bs58(&orders[0].placeholder_output_coin);
+    let placeholder_output_coin = coin_from_bs58(&orders[0].placeholder_output_coin);
 
-    output_coin[AMOUNT] = input_coin_0[AMOUNT] + input_coin_1[AMOUNT];
+    // when added to the placeholder amount, correction yields the desire sum
+    let correction = input_coin_0[AMOUNT]
+        + input_coin_1[AMOUNT]
+        - placeholder_output_coin[AMOUNT];
 
+    // prepare the lottery transaction for the prover
     let lottery_tx = LotteryTransaction {
         input_orders: orders.clone(),
-        output_coin: coin_to_bs58(&output_coin),
+        winner_index: 0,
+        amount_correction: field_element_to_bs58(&correction),
     };
 
     let client = Client::new();

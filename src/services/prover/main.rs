@@ -1,4 +1,5 @@
 use actix_web::{web, App, HttpServer};
+use lib_mpc_zexe::coin::AMOUNT;
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use rand_chacha::rand_core::SeedableRng;
@@ -21,8 +22,12 @@ struct Order {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct LotteryTransaction {
+    /// orders entering the lottery
     input_orders: Vec<Order>,
-    output_coin: CoinBs58,
+    /// which of the orders is the winner?
+    winner_index: u64,
+    /// the correction to the placeholder coin
+    amount_correction: FieldElementBs58,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,21 +58,33 @@ async fn submit_lottery_tx(
 
     let crs = extract_crs();
 
-    let f_input_coins: Vec<[F; 8]> = tx.input_orders
+    let input_coins: Vec<[F; 8]> = tx.input_orders
         .iter()
         .map(|o| coin_from_bs58(&o.input_coin))
         .collect::<Vec<_>>();
 
-    let f_output_coin = coin_from_bs58(&tx.output_coin);
+    // let us compute the output coin
+    let mut output_coin = coin_from_bs58(
+        &tx.input_orders[tx.winner_index as usize].placeholder_output_coin
+    );
     
+    let amount_correction = field_element_from_bs58(
+        &tx.amount_correction
+    );
+    output_coin[AMOUNT] += amount_correction;
+
+    // input the (blinded) input coins and corrected output coin
+    // to the prover algorithm
     let proof = plonk_prove(
-        &crs, 
-        f_input_coins.as_slice(), 
-        [f_output_coin].as_slice(),
+        &crs,
+        input_coins.as_slice(),
+        [output_coin].as_slice(),
         apps::lottery::prover::<8>
     );
 
+    // encode proof in base 58
     let collaborative_proof_bs58 = proof_to_bs58(&proof);
+
     let local_proofs = tx.input_orders
         .iter()
         .map(|o| o.input_coin_local_proof.clone())

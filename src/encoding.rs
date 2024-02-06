@@ -17,6 +17,19 @@ type ConstraintF = ark_bw6_761::Fr;
 type ConstraintPairing = ark_bw6_761::BW6_761;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FieldElementBs58 {
+	pub field: String,
+}
+
+pub fn field_element_to_bs58(field: &F) -> FieldElementBs58 {
+    FieldElementBs58 { field: encode_f_as_bs58_str(field) }
+}
+
+pub fn field_element_from_bs58(fieldbs58: &FieldElementBs58) -> F {
+    decode_bs58_str_as_f(&fieldbs58.field)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoinBs58 {
 	pub fields: [String; NUM_FIELDS],
 }

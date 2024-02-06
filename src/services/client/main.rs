@@ -9,7 +9,6 @@ use ark_std::{*, rand::RngCore};
 use lib_mpc_zexe::coin::*;
 use lib_mpc_zexe::apps::lottery;
 use lib_mpc_zexe::record_commitment::*;
-
 use lib_mpc_zexe::encoding::*;
 
 
