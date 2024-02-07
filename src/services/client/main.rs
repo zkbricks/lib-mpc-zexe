@@ -147,14 +147,16 @@ async fn main() -> reqwest::Result<()> {
     let coins = airdrop();
 
     let now = Instant::now();
-    let (alice_proof, alice_public_inputs) =
-        lottery::generate_groth_proof(&pk, &coins, 0, &alice_key().0);
+    let (alice_proof, alice_public_inputs) = lottery::generate_groth_proof(
+        &pk, &coins, 0, &create_output_coin(&coins[0]), &alice_key().0
+    );
     println!("proof generated in {}.{} secs",
         now.elapsed().as_secs(), now.elapsed().subsec_millis()
     );
 
-    let (bob_proof, bob_public_inputs) =
-        lottery::generate_groth_proof(&pk, &coins, 1, &bob_key().0);
+    let (bob_proof, bob_public_inputs) = lottery::generate_groth_proof(
+        &pk, &coins, 1, &create_output_coin(&coins[1]), &bob_key().0
+    );
 
     let bs58_coins = coins
         .iter()

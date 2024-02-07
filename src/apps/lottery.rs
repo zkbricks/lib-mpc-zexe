@@ -126,8 +126,9 @@ pub fn verifier<const N: usize>(
 pub struct SpendCircuit {
     pub prf_instance_nullifier: JZPRFInstance,
     pub prf_instance_ownership: JZPRFInstance,
-    pub record: JZRecord<8>,
-    pub coins: Vec<Coin<ark_bls12_377::Fr>>,
+    pub spent_coin_record: JZRecord<8>,
+    pub placeholder_output_coin_record: JZRecord<8>,
+    pub all_created_coins: Vec<Coin<ark_bls12_377::Fr>>,
     pub db: JZVectorDB<ark_bls12_377::G1Affine>,
     pub index: usize,
 }
@@ -139,7 +140,12 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
         cs: ConstraintSystemRef<ConstraintF>,
     ) -> Result<()> {
 
-        //--------------- Private key ------------------
+        let crs_var = JZKZGCommitmentParamsVar::<8>::new_constant(
+            cs.clone(),
+            self.spent_coin_record.crs.clone()
+        ).unwrap();
+
+        //--------------- Private key knowledge ------------------
 
         let params_var = JZPRFParamsVar::new_constant(
             cs.clone(),
@@ -155,21 +161,58 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
             cs.clone(), &params_var, &prf_instance_var
         );
 
-        //--------------- KZG proof ------------------
+        //--------------- KZG proof for placeholder coin ------------------
+
+        let coin_var = JZRecordVar::<8>::new_witness(
+            cs.clone(),
+            || Ok(self.placeholder_output_coin_record.borrow())
+        ).unwrap();
+
+        let record = self.placeholder_output_coin_record.borrow();
+        let computed_com = record.commitment().into_affine();
+
+        let placeholder_com_x = ark_bls12_377::constraints::FqVar::new_input(
+            ark_relations::ns!(cs, "placeholder_com_x"),
+            || { Ok(computed_com.x) },
+        ).unwrap();
+
+        let placeholder_com_y = ark_bls12_377::constraints::FqVar::new_input(
+            ark_relations::ns!(cs, "placeholder_com_y"),
+            || { Ok(computed_com.y) },
+        ).unwrap();
+
+        record_commitment::constraints::generate_constraints(
+            cs.clone(),
+            &crs_var,
+            &coin_var
+        ).unwrap();
+
+        // compute the affine var from the projective var
+        let coin_com_affine = coin_var.commitment.to_affine().unwrap();
+        // does the computed com match the input com?
+        coin_com_affine.x.enforce_equal(&placeholder_com_x)?;
+        coin_com_affine.y.enforce_equal(&placeholder_com_y)?;
+
+        //--------------- KZG proof for spent coin ------------------
 
         let crs_var = JZKZGCommitmentParamsVar::<8>::new_constant(
             cs.clone(),
-            self.record.crs.clone()
+            self.spent_coin_record.crs.clone()
         ).unwrap();
         
         let coin_var = JZRecordVar::<8>::new_witness(
             cs.clone(),
-            || Ok(self.record.borrow())
+            || Ok(self.spent_coin_record.borrow())
         ).unwrap();
 
-        let record = self.record.borrow();
+        let record = self.spent_coin_record.borrow();
         let computed_com = record.blinded_commitment().into_affine();
 
+        // we will publicly release a blinded commitment to hide 
+        // which of the existing coins is being spent
+
+        // a commitment is an (affine) group element so we separately 
+        // expose the x and y coordinates, computed below
         let input_com_x = ark_bls12_377::constraints::FqVar::new_input(
             ark_relations::ns!(cs, "input_com_x"), 
             || { Ok(computed_com.x) },
@@ -323,8 +366,9 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
             prf_instance_nullifier: JZPRFInstance::new(
                 &prf_params, coins[0].fields[RHO].as_slice(), &[0u8; 32]
             ),
-            record: coins[0].clone(),
-            coins: coins.iter().map(|coin| coin.fields()).collect(),
+            spent_coin_record: coins[0].clone(), // doesn;t matter what value the coin has
+            placeholder_output_coin_record: coins[1].clone(), // doesn't matter what value
+            all_created_coins: coins.iter().map(|coin| coin.fields()).collect(),
             db: db,
             index: 0,
         }
@@ -341,6 +385,7 @@ pub fn generate_groth_proof(
     pk: &ProvingKey<BW6_761>,
     coins: &Vec<JZRecord<8>>,
     coin_index: usize,
+    placeholder_coin: &JZRecord<8>,
     sk: &[u8; 32]
 ) -> (Proof<BW6_761>, Vec<ConstraintF>) {
     let seed = [0u8; 32];
@@ -364,13 +409,16 @@ pub fn generate_groth_proof(
         prf_instance_nullifier: JZPRFInstance::new(
             &prf_params, coins[coin_index].fields[RHO].as_slice(), sk
         ),
-        record: coins[coin_index].clone(),
-        coins: coins.iter().map(|coin| coin.fields()).collect(),
+        spent_coin_record: coins[coin_index].clone(),
+        placeholder_output_coin_record: placeholder_coin.clone(),
+        all_created_coins: coins.iter().map(|coin| coin.fields()).collect(),
         db: db,
         index: coin_index,
     };
 
-    let blinded_com = circuit.record.blinded_commitment().into_affine();
+    let blinded_com = circuit.spent_coin_record.blinded_commitment().into_affine();
+    let placeholder_com = circuit.placeholder_output_coin_record.commitment().into_affine();
+
     let input_root = circuit.db.commitment();
     let nullifier = ConstraintF::from(
             BigInt::<6>::from_bits_le(
@@ -380,7 +428,9 @@ pub fn generate_groth_proof(
         )
     );
 
-    let public_inputs = vec![ 
+    let public_inputs = vec![
+        placeholder_com.x,
+        placeholder_com.y,
         blinded_com.x,
         blinded_com.y,
         input_root.x,
