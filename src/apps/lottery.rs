@@ -25,8 +25,7 @@ use crate::coin::*;
 type ConstraintF = ark_bw6_761::Fr;
 type F = ark_bls12_377::Fr;
 
-
-pub fn prover<const N: usize>(
+pub fn collaborative_prover<const N: usize>(
     input_coins_poly: &[DensePolynomial<F>],
     output_coins_poly: &[DensePolynomial<F>],
 ) -> (Vec<DensePolynomial<F>>, Vec<DensePolynomial<F>>) {
@@ -77,7 +76,7 @@ pub fn prover<const N: usize>(
     (vec![lhs_poly_1, lhs_poly_2, lhs_poly_3, lhs_poly_4, lhs_poly_5], vec![])
 }
 
-pub fn verifier<const N: usize>(
+pub fn collaborative_verifier<const N: usize>(
     r: &F, proof: &PlonkProof
 ) -> Vec<F> {
     let lagrange_polynomials = (0..N)

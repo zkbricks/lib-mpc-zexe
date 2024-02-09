@@ -31,9 +31,16 @@ struct LotteryTransaction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct LotteryProof {
+struct ValidityProof {
+    /// Groth16 proofs for spent coin and placeholder coin
     local_proofs: Vec<GrothProofBs58>,
-    collaborative_prooof: PlonkProofBs58
+    /// Collaborative PLONK proof for the relation 
+    /// between spent coins and created coins
+    collaborative_prooof: PlonkProofBs58,
+    /// which of the orders
+    placeholder_selector: Vec<bool>,
+    /// the correction to the placeholder coin
+    amount_correction: Vec<FieldElementBs58>,
 }
 
 type AppStateType = Vec<LotteryTransaction>;
@@ -79,7 +86,7 @@ async fn submit_lottery_tx(
         &crs,
         input_coins.as_slice(),
         [output_coin].as_slice(),
-        apps::lottery::prover::<8>
+        apps::lottery::collaborative_prover::<8>
     );
 
     // encode proof in base 58
@@ -90,9 +97,13 @@ async fn submit_lottery_tx(
         .map(|o| o.input_coin_local_proof.clone())
         .collect::<Vec<_>>();
 
-    let lottery_proof = LotteryProof {
+    let lottery_proof = ValidityProof {
         local_proofs: local_proofs,
-        collaborative_prooof: collaborative_proof_bs58
+        collaborative_prooof: collaborative_proof_bs58,
+        placeholder_selector: (0..tx.input_orders.len())
+            .map(|i| i == tx.winner_index as usize)
+            .collect::<Vec<_>>(),
+        amount_correction: vec![tx.amount_correction.clone()],
     };
 
     let client = Client::new();

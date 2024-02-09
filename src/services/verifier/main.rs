@@ -1,7 +1,11 @@
 use actix_web::{web, App, HttpServer};
+use ark_ec::{AffineRepr, CurveGroup, Group};
+use ark_ff::PrimeField;
 use ark_bw6_761::BW6_761;
 use ark_groth16::*;
 use ark_snark::SNARK;
+use lib_mpc_zexe::coin::AMOUNT;
+use std::ops::Add;
 use std::sync::Mutex;
 use rand_chacha::rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
@@ -13,12 +17,19 @@ use lib_mpc_zexe::apps;
 use lib_mpc_zexe::encoding::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct LotteryProof {
+struct ValidityProof {
+    /// Groth16 proofs for spent coin and placeholder coin
     local_proofs: Vec<GrothProofBs58>,
-    collaborative_prooof: PlonkProofBs58
+    /// Collaborative PLONK proof for the relation 
+    /// between spent coins and created coins
+    collaborative_prooof: PlonkProofBs58,
+    /// which of the orders
+    placeholder_selector: Vec<bool>,
+    /// the correction to the placeholder coin
+    amount_correction: Vec<FieldElementBs58>,
 }
 
-type AppStateType = Vec<LotteryProof>;
+type AppStateType = Vec<ValidityProof>;
 
 struct GlobalAppState {
     db: Mutex<AppStateType>, // <- Mutex is necessary to mutate safely across threads
@@ -38,7 +49,7 @@ fn extract_vk() -> VerifyingKey<BW6_761> {
 
 async fn verify_lottery_tx(
     data: web::Data<GlobalAppState>,
-    proof: web::Json<LotteryProof>
+    proof: web::Json<ValidityProof>
 ) -> String {
     let mut db = data.db.lock().unwrap();
 
@@ -46,8 +57,43 @@ async fn verify_lottery_tx(
     let vk = extract_vk();
 
     let proof = proof.into_inner();
+    let plonk_proof = proof_from_bs58(&proof.collaborative_prooof);
 
     let now = Instant::now();
+
+    let mut output_coin_index = 0;
+    for i in 0..proof.placeholder_selector.len() {
+        let (_, public_inputs) = groth_proof_from_bs58(&proof.local_proofs[i]);
+
+        // verify that the (commitments of) output coins in collaborative proof are
+        // equal to the placeholder coins in local proofs, modulo amount corrections
+        if proof.placeholder_selector[i] {
+            let amount_correction = field_element_from_bs58(
+                &proof.amount_correction[i]
+            );
+            let correction_group_elem = crs
+                .crs_lagrange[AMOUNT]
+                .clone()
+                .mul_bigint(amount_correction.into_bigint())
+                .into_affine();
+
+            let mut com = ark_bls12_377::G1Affine::new(public_inputs[0], public_inputs[1]);
+            com = com.add(&correction_group_elem).into_affine();
+
+            // check that the plonk proof is using the commitment we computed here
+            assert_eq!(com.x(), plonk_proof.output_coins_com[output_coin_index].x());
+            assert_eq!(com.y(), plonk_proof.output_coins_com[output_coin_index].y());
+
+            output_coin_index += 1;
+        }
+
+        // verify that (commitments of) spent coins match in collaborative and local proofs
+        let com = ark_bls12_377::G1Affine::new(public_inputs[2], public_inputs[3]);
+        assert_eq!(com.x(), plonk_proof.input_coins_com[i].x());
+        assert_eq!(com.y(), plonk_proof.input_coins_com[i].y());
+    }
+
+
     // verify the local proofs
     for p in &proof.local_proofs {
         let (groth_proof, public_inputs) = groth_proof_from_bs58(&p);
@@ -63,8 +109,8 @@ async fn verify_lottery_tx(
     // verify the collaborative proof
     plonk_verify(
         &crs,
-        &proof_from_bs58(&proof.collaborative_prooof),
-        apps::lottery::verifier::<8>
+        &plonk_proof,
+        apps::lottery::collaborative_verifier::<8>
     );
     
     println!("proof verified in {}.{} secs", 
