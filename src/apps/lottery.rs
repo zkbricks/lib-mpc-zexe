@@ -337,7 +337,7 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
     
         let mut coins = Vec::new();
         let mut records = Vec::new();
-        for _ in 0..2u8 {
+        for _ in 0..64u8 {
             let fields: [Vec<u8>; 8] = 
             [
                 vec![0u8; 31],

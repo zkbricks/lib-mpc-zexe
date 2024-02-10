@@ -84,7 +84,7 @@ fn airdrop() -> Vec<JZRecord<8>> {
     };
 
     let mut coins = Vec::new();
-    for i in 0..2u8 {
+    for i in 0..64u8 {
         let mut entropy = [0u8; 31];
         rng.fill_bytes(&mut entropy);
     
