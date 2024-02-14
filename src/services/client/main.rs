@@ -2,6 +2,7 @@ use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
 use rand_chacha::rand_core::SeedableRng;
 use std::time::Instant;
+use clap::{App, Arg};
 
 use ark_ff::{*};
 use ark_std::{*, rand::RngCore};
@@ -113,7 +114,7 @@ fn airdrop() -> Vec<JZRecord<8>> {
     coins
 }
 
-fn create_output_coin(template: &JZRecord<8>) -> JZRecord<8> {
+fn create_placeholder_coin(template: &JZRecord<8>) -> JZRecord<8> {
     let seed = [0u8; 32];
     let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
 
@@ -140,30 +141,65 @@ fn create_output_coin(template: &JZRecord<8>) -> JZRecord<8> {
     JZRecord::<8>::new(&crs, &fields, &[0u8; 31].to_vec())
 }
 
+fn parse_args() {
+    let matches = App::new("zkBricks Client")
+    .version("1.0")
+    .author("zkBricks Inc. <help@zkbricks.com>")
+    .about("Submits transactions to zkBricks testnet")
+    .arg(
+        Arg::with_name("username")
+            .short('u') // allows -u
+            .long("username") // allows --username
+            .takes_value(true)
+            .help("Sets the username"),
+    )
+    .arg(
+        Arg::with_name("verbose")
+            .short('v')
+            .long("verbose")
+            .multiple(true) // allows -v, -vv, -vvv, etc.
+            .help("Sets the level of verbosity"),
+    )
+    .get_matches();
+
+    let username = matches.value_of("username").unwrap_or("Guest");
+    let verbosity = matches.occurrences_of("verbose");
+
+    println!("Username: {}", username);
+    println!("Verbosity level: {}", verbosity);
+}
+
 #[tokio::main]
 async fn main() -> reqwest::Result<()> {
+    parse_args();
+    
     let (pk, _vk) = lottery::circuit_setup();
 
     let coins = airdrop();
 
     let now = Instant::now();
     let (alice_proof, alice_public_inputs) = lottery::generate_groth_proof(
-        &pk, &coins, 0, &create_output_coin(&coins[0]), &alice_key().0
+        &pk, &coins, 0, &create_placeholder_coin(&coins[0]), &alice_key().0
     );
     println!("proof generated in {}.{} secs",
         now.elapsed().as_secs(), now.elapsed().subsec_millis()
     );
 
     let (bob_proof, bob_public_inputs) = lottery::generate_groth_proof(
-        &pk, &coins, 1, &create_output_coin(&coins[1]), &bob_key().0
+        &pk, &coins, 1, &create_placeholder_coin(&coins[1]), &bob_key().0
     );
 
     let bs58_coins = coins
         .iter()
         .map(|coin| coin_to_bs58(&coin.blinded_fields()))
         .collect::<Vec<_>>();
+
+    //FgvRhbyZhrB85i3Xui9iB7UjF92zVkREtcw2E1aV2y1R
+    println!("Alice's public key: {:?}", bs58_coins[0].fields[OWNER]);
+    //FfMcCs8a2Bnpo5UxkWX4APHJunSys5SDhmMuV9rfsCf9
+    println!("Bob's public key: {:?}", bs58_coins[1].fields[OWNER]);
     
-    list_orders().await?;
+    //list_orders().await?;
     submit_order(
         Order {
             id:
@@ -173,10 +209,10 @@ async fn main() -> reqwest::Result<()> {
             input_coin_local_proof:
                 groth_proof_to_bs58(&alice_proof, &alice_public_inputs),
             placeholder_output_coin:
-                coin_to_bs58(&create_output_coin(&coins[0]).fields())
+                coin_to_bs58(&create_placeholder_coin(&coins[0]).fields())
         }
     ).await?;
-    list_orders().await?;
+    //list_orders().await?;
     submit_order(
         Order {
             id:
@@ -186,10 +222,11 @@ async fn main() -> reqwest::Result<()> {
             input_coin_local_proof:
                 groth_proof_to_bs58(&bob_proof, &bob_public_inputs),
             placeholder_output_coin:
-                coin_to_bs58(&create_output_coin(&coins[1]).fields())
+                coin_to_bs58(&create_placeholder_coin(&coins[1]).fields())
         }
     ).await?;
-    list_orders().await?;
+    //list_orders().await?;
+    
     perform_lottery().await?;
 
     Ok(())
