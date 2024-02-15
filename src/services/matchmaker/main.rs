@@ -1,28 +1,15 @@
 use actix_web::{web, App, HttpServer};
 use reqwest::Client;
 use std::sync::Mutex;
-use serde::{Deserialize, Serialize};
 
 use lib_mpc_zexe::coin::*;
 use lib_mpc_zexe::protocol as protocol;
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Orders {
-    orders: Vec<protocol::LotteryOrder>,
-}
 
 type AppStateType = Vec<protocol::LotteryOrder>;
 
 // a mutex is necessary to mutate safely across webserver threads
 struct GlobalAppState {
     db: Mutex<AppStateType>,
-}
-
-async fn debug(data: web::Data<GlobalAppState>) -> String {
-    let db = data.db.lock().unwrap();
-    let items_response = Orders { orders: (*db).to_owned() };
-
-    serde_json::to_string(&items_response).unwrap()
 }
 
 async fn submit_order(
@@ -87,7 +74,6 @@ async fn main() -> std::io::Result<()> {
         // move counter into the closure
         App::new()
             .app_data(app_state.clone()) // <- register the created data
-            .route("/debug", web::get().to(debug))
             .route("/submit", web::post().to(submit_order))
             .route("/lottery", web::post().to(perform_lottery))
     })

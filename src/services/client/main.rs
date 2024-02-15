@@ -1,5 +1,4 @@
-use reqwest::{Client, Response};
-use serde::{Deserialize, Serialize};
+use reqwest::Client;
 use rand_chacha::rand_core::SeedableRng;
 use std::time::Instant;
 use clap::{App, Arg};
@@ -13,34 +12,7 @@ use lib_mpc_zexe::record_commitment::*;
 use lib_mpc_zexe::protocol as protocol;
 
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct Order {
-    id: i32,
-    input_coin: protocol::CoinBs58,
-    input_coin_local_proof: protocol::GrothProofBs58,
-    placeholder_output_coin: protocol::CoinBs58,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Orders {
-    orders: Vec<Order>,
-}
-
-async fn list_orders() -> reqwest::Result<()> {
-    let client = Client::new();
-    let response: Response = client.get("http://127.0.0.1:8080/debug").send().await?;
-    
-    if response.status().is_success() {
-        let response_content: String = response.text().await?;
-        println!("List of orders: {}", response_content);
-    } else {
-        println!("Failed to retrieve orders: {:?}", response.status());
-    }
-    
-    Ok(())
-}
-
-async fn submit_order(item: Order) -> reqwest::Result<()> {
+async fn submit_order(item: protocol::LotteryOrder) -> reqwest::Result<()> {
     let client = Client::new();
     let response = client.post("http://127.0.0.1:8080/submit")
         .json(&item)
@@ -201,9 +173,7 @@ async fn main() -> reqwest::Result<()> {
     
     //list_orders().await?;
     submit_order(
-        Order {
-            id:
-                0,
+        protocol::LotteryOrder {
             input_coin:
                 bs58_coins[0].clone(),
             input_coin_local_proof:
@@ -214,9 +184,7 @@ async fn main() -> reqwest::Result<()> {
     ).await?;
     //list_orders().await?;
     submit_order(
-        Order {
-            id:
-                1,
+        protocol::LotteryOrder {
             input_coin:
                 bs58_coins[1].clone(),
             input_coin_local_proof:
