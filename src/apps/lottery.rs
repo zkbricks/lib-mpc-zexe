@@ -21,19 +21,29 @@ use crate::record_commitment::{*, constraints::*};
 use crate::prf::{*, constraints::*};
 use crate::coin::*;
 
-
+// Finite Field used to encode the zk circuit
 type ConstraintF = ark_bw6_761::Fr;
+// Finite Field used to encode the coin data structure
 type F = ark_bls12_377::Fr;
 
+/// collaborative_prover contains the application-specific functionality for
+/// collaborative SNARK proof generation. Specifically, it contains the
+/// logic for deriving constraints (encoded as polynomial identities) 
+/// from the input and output coin polynomials -- these polynomials will 
+/// be opened in the generated PLONK proof.
 pub fn collaborative_prover<const N: usize>(
     input_coins_poly: &[DensePolynomial<F>],
     output_coins_poly: &[DensePolynomial<F>],
 ) -> (Vec<DensePolynomial<F>>, Vec<DensePolynomial<F>>) {
+    // Each constraint in our app will be encoded as a polynomial equation
+
+    // coin data structure is encoded over the lagrange basis, 
+    // so let's compute the lagrange polynomials first
     let lagrange_polynomials = (0..N)
         .map(|i| utils::lagrange_poly(N, i))
         .collect::<Vec<DensePolynomial<F>>>();
 
-    // conservation: input[0].amount + input[1].amount = output[0].amount
+    // 1) conservation of value: input[0].amount + input[1].amount = output[0].amount
     let lhs_poly_1 = lagrange_polynomials[AMOUNT].clone()
         .mul(
             &(input_coins_poly[0].clone()
@@ -41,41 +51,50 @@ pub fn collaborative_prover<const N: usize>(
             .sub(&output_coins_poly[0]))
         );
 
-    // same asset id: input[0].asset_id = output[0].asset_id
+    // 2) input and output coins have the same asset id, implied by 2a and 2b below
+
+    // 2a) same asset id: input[0].asset_id = output[0].asset_id
     let lhs_poly_2 = lagrange_polynomials[ASSET_ID].clone()
         .mul(
             &(input_coins_poly[0].clone()
             .sub(&output_coins_poly[0]))
         );
 
-    // same asset id: input[1].asset_id = output[0].asset_id
+    // 2b) same asset id: input[1].asset_id = output[0].asset_id
     let lhs_poly_3 = lagrange_polynomials[ASSET_ID].clone()
         .mul(
             &(input_coins_poly[1].clone()
             .sub(&output_coins_poly[0]))
         );
 
-    // same asset id: input[0].app_id = output[0].asset_id
-    let app_id_lottery_poly = utils::poly_eval_mult_const(
-        &lagrange_polynomials[APP_ID].clone(),
-        &F::from(AppId::LOTTERY as u64)
-    );
-
-    let lhs_poly_4 = lagrange_polynomials[APP_ID].clone()
-        .mul(
-            &input_coins_poly[0].clone()
-            .sub(&app_id_lottery_poly)
+    // 3) check that the app id is LOTTERY on input[0] and input[1]
+    let (lhs_poly_4, lhs_poly_5) = {
+        let app_id_lottery_poly = utils::poly_eval_mult_const(
+            &lagrange_polynomials[APP_ID].clone(),
+            &F::from(AppId::LOTTERY as u64)
         );
 
-    let lhs_poly_5 = lagrange_polynomials[APP_ID].clone()
-        .mul(
-            &input_coins_poly[1].clone()
-            .sub(&app_id_lottery_poly)
-        );
+        let lhs_poly_4 = lagrange_polynomials[APP_ID].clone()
+            .mul(
+                &input_coins_poly[0].clone()
+                .sub(&app_id_lottery_poly)
+            );
+
+        let lhs_poly_5 = lagrange_polynomials[APP_ID].clone()
+            .mul(
+                &input_coins_poly[1].clone()
+                .sub(&app_id_lottery_poly)
+            );
+
+        (lhs_poly_4, lhs_poly_5)
+    };
 
     (vec![lhs_poly_1, lhs_poly_2, lhs_poly_3, lhs_poly_4, lhs_poly_5], vec![])
 }
 
+/// collaborative_verifier contains the application-specific functionality for
+/// verifying the collaborative SNARK (PLONK) proof. Specifically, it contains 
+/// the logic for checking all the application-specific polynomial identities.
 pub fn collaborative_verifier<const N: usize>(
     r: &F, proof: &PlonkProof
 ) -> Vec<F> {
@@ -127,7 +146,6 @@ pub struct SpendCircuit {
     pub prf_instance_ownership: JZPRFInstance,
     pub spent_coin_record: JZRecord<8>,
     pub placeholder_output_coin_record: JZRecord<8>,
-    pub all_created_coins: Vec<Coin<ark_bls12_377::Fr>>,
     pub db: JZVectorDB<ark_bls12_377::G1Affine>,
     pub index: usize,
 }
@@ -367,7 +385,6 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
             ),
             spent_coin_record: coins[0].clone(), // doesn;t matter what value the coin has
             placeholder_output_coin_record: coins[1].clone(), // doesn't matter what value
-            all_created_coins: coins.iter().map(|coin| coin.fields()).collect(),
             db: db,
             index: 0,
         }
@@ -410,7 +427,6 @@ pub fn generate_groth_proof(
         ),
         spent_coin_record: coins[coin_index].clone(),
         placeholder_output_coin_record: placeholder_coin.clone(),
-        all_created_coins: coins.iter().map(|coin| coin.fields()).collect(),
         db: db,
         index: coin_index,
     };
