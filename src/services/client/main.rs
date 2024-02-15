@@ -10,15 +10,15 @@ use ark_std::{*, rand::RngCore};
 use lib_mpc_zexe::coin::*;
 use lib_mpc_zexe::apps::lottery;
 use lib_mpc_zexe::record_commitment::*;
-use lib_mpc_zexe::encoding::*;
+use lib_mpc_zexe::protocol as protocol;
 
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct Order {
     id: i32,
-    input_coin: CoinBs58,
-    input_coin_local_proof: GrothProofBs58,
-    placeholder_output_coin: CoinBs58,
+    input_coin: protocol::CoinBs58,
+    input_coin_local_proof: protocol::GrothProofBs58,
+    placeholder_output_coin: protocol::CoinBs58,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -191,7 +191,7 @@ async fn main() -> reqwest::Result<()> {
 
     let bs58_coins = coins
         .iter()
-        .map(|coin| coin_to_bs58(&coin.blinded_fields()))
+        .map(|coin| protocol::coin_to_bs58(&coin.blinded_fields()))
         .collect::<Vec<_>>();
 
     //FgvRhbyZhrB85i3Xui9iB7UjF92zVkREtcw2E1aV2y1R
@@ -207,9 +207,9 @@ async fn main() -> reqwest::Result<()> {
             input_coin:
                 bs58_coins[0].clone(),
             input_coin_local_proof:
-                groth_proof_to_bs58(&alice_proof, &alice_public_inputs),
+                protocol::groth_proof_to_bs58(&alice_proof, &alice_public_inputs),
             placeholder_output_coin:
-                coin_to_bs58(&create_placeholder_coin(&coins[0]).fields())
+                protocol::coin_to_bs58(&create_placeholder_coin(&coins[0]).fields())
         }
     ).await?;
     //list_orders().await?;
@@ -220,9 +220,9 @@ async fn main() -> reqwest::Result<()> {
             input_coin:
                 bs58_coins[1].clone(),
             input_coin_local_proof:
-                groth_proof_to_bs58(&bob_proof, &bob_public_inputs),
+                protocol::groth_proof_to_bs58(&bob_proof, &bob_public_inputs),
             placeholder_output_coin:
-                coin_to_bs58(&create_placeholder_coin(&coins[1]).fields())
+                protocol::coin_to_bs58(&create_placeholder_coin(&coins[1]).fields())
         }
     ).await?;
     //list_orders().await?;

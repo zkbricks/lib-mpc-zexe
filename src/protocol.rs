@@ -16,17 +16,43 @@ type G1Affine = <Curve as Pairing>::G1Affine;
 type ConstraintF = ark_bw6_761::Fr;
 type ConstraintPairing = ark_bw6_761::BW6_761;
 
+/// LotteryOrder is submitted by the client to the MPC subnet
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LotteryOrder {
+    pub input_coin: CoinBs58,
+    pub input_coin_local_proof: GrothProofBs58,
+    pub placeholder_output_coin: CoinBs58,
+}
+
+/// LotteryMatch is the message sent by the matchmaker to the SNARK prover
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LotteryMatch {
+    /// orders entering the lottery
+    pub input_orders: Vec<LotteryOrder>,
+    /// which of the orders is the winner?
+    pub winner_index: u64,
+    /// the correction to the placeholder coin
+    pub amount_correction: FieldElementBs58,
+}
+
+/// ValidityProof is submitted by the MPC subnet to the L1 contract
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppTransaction {
+    /// Groth16 proofs for spent coin and placeholder coin
+    pub local_proofs: Vec<GrothProofBs58>,
+    /// Collaborative PLONK proof for the relation 
+    /// between spent coins and created coins
+    pub collaborative_prooof: PlonkProofBs58,
+    /// which of the orders
+    pub placeholder_selector: Vec<bool>,
+    /// the correction to the placeholder coin
+    pub amount_correction: Vec<FieldElementBs58>,
+}
+
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldElementBs58 {
 	pub field: String,
-}
-
-pub fn field_element_to_bs58(field: &F) -> FieldElementBs58 {
-    FieldElementBs58 { field: encode_f_as_bs58_str(field) }
-}
-
-pub fn field_element_from_bs58(fieldbs58: &FieldElementBs58) -> F {
-    decode_bs58_str_as_f(&fieldbs58.field)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,24 +60,10 @@ pub struct CoinBs58 {
 	pub fields: [String; NUM_FIELDS],
 }
 
-pub fn coin_to_bs58(coin: &Coin<F>) -> CoinBs58 {
-    CoinBs58 { fields: 
-        coin
-        .iter()
-        .map(|f| encode_f_as_bs58_str(f))
-        .collect::<Vec<_>>()
-        .try_into()
-        .unwrap()
-    }
-}
-
-pub fn coin_from_bs58(coin: &CoinBs58) -> Coin<F> {
-	coin.fields
-		.iter()
-		.map(|s| decode_bs58_str_as_f(s))
-		.collect::<Vec<_>>()
-		.try_into()
-		.unwrap()
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrothProofBs58 {
+    pub proof: String,
+    pub public_inputs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,7 +92,36 @@ pub struct PlonkProofBs58 {
     pub additional_opening_proof: Vec<String>,
 }
 
-pub fn proof_from_bs58(proof: &PlonkProofBs58) -> PlonkProof {
+
+pub fn field_element_to_bs58(field: &F) -> FieldElementBs58 {
+    FieldElementBs58 { field: encode_f_as_bs58_str(field) }
+}
+
+pub fn field_element_from_bs58(fieldbs58: &FieldElementBs58) -> F {
+    decode_bs58_str_as_f(&fieldbs58.field)
+}
+
+pub fn coin_to_bs58(coin: &Coin<F>) -> CoinBs58 {
+    CoinBs58 { fields: 
+        coin
+        .iter()
+        .map(|f| encode_f_as_bs58_str(f))
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap()
+    }
+}
+
+pub fn coin_from_bs58(coin: &CoinBs58) -> Coin<F> {
+	coin.fields
+		.iter()
+		.map(|s| decode_bs58_str_as_f(s))
+		.collect::<Vec<_>>()
+		.try_into()
+		.unwrap()
+}
+
+pub fn plonk_proof_from_bs58(proof: &PlonkProofBs58) -> PlonkProof {
     let input_coins_com = proof.input_coins_com
         .iter()
         .map(|s| decode_bs58_str_as_g1(s))
@@ -150,7 +191,7 @@ pub fn proof_from_bs58(proof: &PlonkProofBs58) -> PlonkProof {
     }
 }
 
-pub fn proof_to_bs58(proof: &PlonkProof) -> PlonkProofBs58 {
+pub fn plonk_proof_to_bs58(proof: &PlonkProof) -> PlonkProofBs58 {
     let input_coins_com = proof.input_coins_com
         .iter()
         .map(|c| encode_g1_as_bs58_str(c))
@@ -218,12 +259,6 @@ pub fn proof_to_bs58(proof: &PlonkProof) -> PlonkProofBs58 {
         quotient_opening_proof,
         additional_opening_proof,
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GrothProofBs58 {
-    pub proof: String,
-    pub public_inputs: Vec<String>,
 }
 
 pub fn groth_proof_to_bs58(

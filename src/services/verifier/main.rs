@@ -8,28 +8,14 @@ use lib_mpc_zexe::coin::AMOUNT;
 use std::ops::Add;
 use std::sync::Mutex;
 use rand_chacha::rand_core::SeedableRng;
-use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
 use lib_mpc_zexe::record_commitment::JZKZGCommitmentParams;
 use lib_mpc_zexe::collaborative_snark::plonk::*;
 use lib_mpc_zexe::apps;
-use lib_mpc_zexe::encoding::*;
+use lib_mpc_zexe::protocol as protocol;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct ValidityProof {
-    /// Groth16 proofs for spent coin and placeholder coin
-    local_proofs: Vec<GrothProofBs58>,
-    /// Collaborative PLONK proof for the relation 
-    /// between spent coins and created coins
-    collaborative_prooof: PlonkProofBs58,
-    /// which of the orders
-    placeholder_selector: Vec<bool>,
-    /// the correction to the placeholder coin
-    amount_correction: Vec<FieldElementBs58>,
-}
-
-type AppStateType = Vec<ValidityProof>;
+type AppStateType = Vec<protocol::AppTransaction>;
 
 struct GlobalAppState {
     db: Mutex<AppStateType>, // <- Mutex is necessary to mutate safely across threads
@@ -49,7 +35,7 @@ fn extract_vk() -> VerifyingKey<BW6_761> {
 
 async fn verify_lottery_tx(
     data: web::Data<GlobalAppState>,
-    proof: web::Json<ValidityProof>
+    proof: web::Json<protocol::AppTransaction>
 ) -> String {
     let mut db = data.db.lock().unwrap();
 
@@ -57,19 +43,19 @@ async fn verify_lottery_tx(
     let vk = extract_vk();
 
     let proof = proof.into_inner();
-    let plonk_proof = proof_from_bs58(&proof.collaborative_prooof);
+    let plonk_proof = protocol::plonk_proof_from_bs58(&proof.collaborative_prooof);
 
     let now = Instant::now();
 
     let mut output_coin_index = 0;
     for i in 0..proof.placeholder_selector.len() {
-        let (_, public_inputs) = groth_proof_from_bs58(&proof.local_proofs[i]);
+        let (_, public_inputs) = protocol::groth_proof_from_bs58(&proof.local_proofs[i]);
 
         // verify that the (commitments of) output coins in collaborative proof are
         // equal to the placeholder coins in local proofs, modulo amount corrections
         if proof.placeholder_selector[i] {
-            let amount_correction = field_element_from_bs58(
-                &proof.amount_correction[i]
+            let amount_correction = protocol::field_element_from_bs58(
+                &proof.amount_correction[output_coin_index]
             );
             let correction_group_elem = crs
                 .crs_lagrange[AMOUNT]
@@ -96,7 +82,7 @@ async fn verify_lottery_tx(
 
     // verify the local proofs
     for p in &proof.local_proofs {
-        let (groth_proof, public_inputs) = groth_proof_from_bs58(&p);
+        let (groth_proof, public_inputs) = protocol::groth_proof_from_bs58(&p);
 
         let valid_proof = Groth16::<BW6_761>::verify(
             &vk,
