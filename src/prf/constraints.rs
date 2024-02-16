@@ -1,6 +1,4 @@
-use ark_crypto_primitives::{
-    crh::{pedersen, CRHSchemeGadget},
-};
+use ark_crypto_primitives::crh::{pedersen, CRHSchemeGadget};
 //use ark_ed_on_bls12_377::{constraints::EdwardsVar, EdwardsProjective as JubJub, Fq};
 use ark_ed_on_bw6_761::{constraints::EdwardsVar, EdwardsProjective as JubJub, Fq};
 #[allow(unused)]
