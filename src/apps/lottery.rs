@@ -169,8 +169,8 @@ pub struct SpendCircuit {
     /// all fields of the placeholder output coin are also a secret witness
     pub placeholder_output_coin_record: JZRecord<8>,
 
-    pub db: JZVectorDB<ark_bls12_377::G1Affine>,
-    pub index: usize,
+    /// Merkle opening proof for proving existence of the unspent coin
+    pub merkle_proof: JZVectorCommitmentOpeningProof<ark_bls12_377::G1Affine>,
 }
 
 /// ConstraintSynthesizer is a trait that is implemented for the SpendCircuit;
@@ -325,25 +325,19 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
         // Here, we will prove that the commitment to the spent coin
         // exists in the merkle tree of all created coins
 
-        let proof = JZVectorCommitmentOpeningProof {
-            root: self.db.commitment(),
-            record: self.db.get_record(self.index).clone(),
-            path: self.db.proof(self.index),
-        };
-
         let proof_var = JZVectorCommitmentOpeningProofVar::new_witness(
             cs.clone(),
-            || Ok(&proof)
+            || Ok(&self.merkle_proof)
         ).unwrap();
 
         let root_com_x = ark_bls12_377::constraints::FqVar::new_input(
             ark_relations::ns!(cs, "input_root_x"), 
-            || { Ok(proof.root.x) },
+            || { Ok(self.merkle_proof.root.x) },
         ).unwrap();
 
         let root_com_y = ark_bls12_377::constraints::FqVar::new_input(
             ark_relations::ns!(cs, "input_root_y"), 
-            || { Ok(proof.root.y) },
+            || { Ok(self.merkle_proof.root.y) },
         ).unwrap();
 
         proof_var.root_var.x.enforce_equal(&root_com_x)?;
@@ -445,6 +439,12 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
         }
     
         let db = JZVectorDB::<ark_bls12_377::G1Affine>::new(&vc_params, &records);
+        let merkle_proof = JZVectorCommitmentOpeningProof {
+            root: db.commitment(),
+            record: db.get_record(0).clone(),
+            path: db.proof(0),
+        };
+
     
         SpendCircuit {
             crs: crs,
@@ -453,8 +453,7 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
             sk: [0u8; 32],
             spent_coin_record: coins[0].clone(), // doesn;t matter what value the coin has
             placeholder_output_coin_record: coins[1].clone(), // doesn't matter what value
-            db: db,
-            index: 0,
+            merkle_proof: merkle_proof,
         }
     };
 
@@ -487,6 +486,11 @@ pub fn generate_groth_proof(
         .collect::<Vec<_>>();
     
     let db = JZVectorDB::<ark_bls12_377::G1Affine>::new(&vc_params, &records);
+    let merkle_proof = JZVectorCommitmentOpeningProof {
+        root: db.commitment(),
+        record: db.get_record(coin_index).clone(),
+        path: db.proof(coin_index),
+    };
 
     let prf_instance_nullifier = JZPRFInstance::new(
         &prf_params,
@@ -503,14 +507,13 @@ pub fn generate_groth_proof(
         spent_coin_record: coins[coin_index].clone(),
         // all fields of the placeholder coin are also a secret witness
         placeholder_output_coin_record: placeholder_coin.clone(),
-        db: db,
-        index: coin_index,
+        merkle_proof: merkle_proof,
     };
 
     let blinded_com = circuit.spent_coin_record.blinded_commitment().into_affine();
     let placeholder_com = circuit.placeholder_output_coin_record.commitment().into_affine();
 
-    let input_root = circuit.db.commitment();
+    let input_root = circuit.merkle_proof.root;
 
     let nullifier = ConstraintF::from(
             BigInt::<6>::from_bits_le(
