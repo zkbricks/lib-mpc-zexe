@@ -62,7 +62,7 @@ pub fn mpc_prover<const N: usize>(
     // same asset id: input[0].app_id = output[0].asset_id
     let app_id_poly = utils::poly_eval_mult_const(
         &lagrange_polynomials[APP_ID].clone(),
-        &F::from(AppId::PAYMENT as u64)
+        &F::from(AppId::OWNED as u64)
     );
 
     let lhs_poly_3 = lagrange_polynomials[APP_ID].clone()
@@ -84,7 +84,7 @@ pub fn mpc_verifier<const N: usize>(
 
     let app_id_poly = utils::poly_eval_mult_const(
         &lagrange_polynomials[APP_ID].clone(),
-        &F::from(AppId::PAYMENT as u64)
+        &F::from(AppId::OWNED as u64)
     );
 
     // polynomial identity with Schwartz-Zippel
@@ -140,7 +140,7 @@ mod tests {
                 pubk.to_vec(), //owner
                 vec![1u8], //asset id
                 vec![10u8], //amount
-                vec![AppId::PAYMENT as u8], //app id
+                vec![AppId::OWNED as u8], //app id
                 vec![0u8],
                 vec![0u8],
                 vec![0u8; 32],
