@@ -164,13 +164,16 @@ pub struct SpendCircuit {
     pub sk: [u8; 32],
 
     /// all fields of the spent coin is a secret witness in the proof generation
-    pub spent_coin_record: JZRecord<8>,
+    pub unspent_coin_record: JZRecord<8>,
+
+    /// all fields of the live input coin derived from the above spent coin
+    pub input_coin_record: JZRecord<8>,
 
     /// all fields of the placeholder output coin are also a secret witness
     pub placeholder_output_coin_record: JZRecord<8>,
 
     /// Merkle opening proof for proving existence of the unspent coin
-    pub merkle_proof: JZVectorCommitmentOpeningProof<ark_bls12_377::G1Affine>,
+    pub unspent_coin_existence_proof: JZVectorCommitmentOpeningProof<ark_bls12_377::G1Affine>,
 }
 
 /// ConstraintSynthesizer is a trait that is implemented for the SpendCircuit;
@@ -204,28 +207,6 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
             &self.vc_params
         ).unwrap();
 
-        //--------------- Private key knowledge ------------------
-        // we will prove that the coin is owned by the spender;
-        // we just invoke the constraint generation for the PRF instance
-
-        // prf_instance_ownership is responsible for proving knowledge
-        // of the secret key corresponding to the coin's public key;
-        // we use the same idea as zCash here, where pk = PRF(0; sk)
-        let prf_instance_ownership = JZPRFInstance::new(
-            &self.prf_params, &[0u8; 32], &self.sk
-        );
-
-        // PRF arguments for the secret witness
-        let prf_instance_var = JZPRFInstanceVar::new_witness(
-            cs.clone(),
-            || Ok(prf_instance_ownership)
-        ).unwrap();
-
-        // trigger the constraint generation for the PRF instance
-        prf::constraints::generate_constraints(
-            cs.clone(), &prf_params_var, &prf_instance_var
-        );
-
         //--------------- KZG proof for placeholder coin ------------------
         // Here, we prove that we know the opening for the commitment denoting
         // the placeholder output coin. Note that the placeholder coin's commitment
@@ -233,27 +214,29 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
         // By including this proof, the verifier is convinced that the party is able
         // to later spend the output coin, as they know the opening.
 
+        let placeholder_coin_record = self.placeholder_output_coin_record.borrow();
+
         // the entire placeholder output record becomes a secret witness
-        let coin_var = JZRecordVar::<8>::new_witness(
+        let placeholder_coin_var = JZRecordVar::<8>::new_witness(
             cs.clone(),
-            || Ok(self.placeholder_output_coin_record.borrow())
+            || Ok(placeholder_coin_record)
         ).unwrap();
 
-        let record = self.placeholder_output_coin_record.borrow();
-
         // we will use its natively computed commitment to set as the public input
-        let computed_com = record.commitment().into_affine();
+        let placeholder_coin_com = placeholder_coin_record
+            .commitment()
+            .into_affine();
 
         // we make the commitment to the placeholder coin be part of the statement
         // to that end, we separately enforce equality of the x and y coordinates
-        let placeholder_com_x = ark_bls12_377::constraints::FqVar::new_input(
+        let stmt_placeholder_com_x = ark_bls12_377::constraints::FqVar::new_input(
             ark_relations::ns!(cs, "placeholder_com_x"),
-            || { Ok(computed_com.x) },
+            || { Ok(placeholder_coin_com.x) },
         ).unwrap();
 
-        let placeholder_com_y = ark_bls12_377::constraints::FqVar::new_input(
+        let stmt_placeholder_com_y = ark_bls12_377::constraints::FqVar::new_input(
             ark_relations::ns!(cs, "placeholder_com_y"),
-            || { Ok(computed_com.y) },
+            || { Ok(placeholder_coin_com.y) },
         ).unwrap();
 
         // trigger the constraint generation, which includes the KZG computation;
@@ -262,48 +245,56 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
         record_commitment::constraints::generate_constraints(
             cs.clone(),
             &crs_var,
-            &coin_var
+            &placeholder_coin_var
         ).unwrap();
 
         // compute the affine var from the projective var
-        let coin_com_affine = coin_var.commitment.to_affine().unwrap();
+        let placeholder_coin_var_com = placeholder_coin_var
+            .commitment
+            .to_affine()
+            .unwrap();
 
         // does the computed com match the input com?
-        coin_com_affine.x.enforce_equal(&placeholder_com_x)?;
-        coin_com_affine.y.enforce_equal(&placeholder_com_y)?;
+        placeholder_coin_var_com.x.enforce_equal(&stmt_placeholder_com_x)?;
+        placeholder_coin_var_com.y.enforce_equal(&stmt_placeholder_com_y)?;
 
-        //--------------- KZG proof for spent coin ------------------
-        // we will now do the same thing for the spent coin, except
-        // we will work with a blinded commitment which re-randomizes
-        // the commitment (using the entropy field) to avoid linkage.
+
+        //--------------- KZG commitment for input coin ------------------
+        // we will now do the same thing for the app-input coin, except
+        // we will work with a blinded commitment which re-randomizes the
+        // commitment (via the entropy field) to avoid linkage with unspent coin.
         // By including this proof, the verifier is convinced that the party
-        // knows the opening for the commitment denoting the spent coin.
+        // knows the opening for the commitment denoting the input coin.
         // This is a necessary precursor to proving additional properties
         // about the coin, such as its ownership and existence.
         
-        let coin_var = JZRecordVar::<8>::new_witness(
+        let input_coin_record = self.input_coin_record.borrow();
+
+        let input_coin_var = JZRecordVar::<8>::new_witness(
             cs.clone(),
-            || Ok(self.spent_coin_record.borrow())
+            || Ok(input_coin_record)
         ).unwrap();
 
-        let record = self.spent_coin_record.borrow();
+        
         // ** NOTE ** that we are using the blinded commitment here 
         // to avoid revealing which of the existing coins is being spent
-        let computed_com = record.blinded_commitment().into_affine();
+        let input_coin_commitment = input_coin_record
+            .blinded_commitment()
+            .into_affine();
 
         // the statement includes the blinded commitment, so let's
         // create those input variables in the circuit
 
         // a commitment is an (affine) group element so we separately 
         // expose the x and y coordinates, computed below
-        let input_com_x = ark_bls12_377::constraints::FqVar::new_input(
+        let stmt_input_com_x = ark_bls12_377::constraints::FqVar::new_input(
             ark_relations::ns!(cs, "input_com_x"), 
-            || { Ok(computed_com.x) },
+            || { Ok(input_coin_commitment.x) },
         ).unwrap();
 
-        let input_com_y = ark_bls12_377::constraints::FqVar::new_input(
+        let stmt_input_com_y = ark_bls12_377::constraints::FqVar::new_input(
             ark_relations::ns!(cs, "input_com_y"), 
-            || { Ok(computed_com.y) },
+            || { Ok(input_coin_commitment.y) },
         ).unwrap();
 
         // fire off the constraint generation which will include the 
@@ -311,41 +302,72 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
         record_commitment::constraints::generate_constraints(
             cs.clone(),
             &crs_var,
-            &coin_var
+            &input_coin_var
         ).unwrap();
 
         // compute the affine var from the projective var
-        let coin_com_affine = coin_var.blinded_commitment.to_affine().unwrap();
+        let input_coin_var_com = input_coin_var
+            .blinded_commitment
+            .to_affine()
+            .unwrap();
 
         // does the computed com match the input com?
-        coin_com_affine.x.enforce_equal(&input_com_x)?;
-        coin_com_affine.y.enforce_equal(&input_com_y)?;
+        input_coin_var_com.x.enforce_equal(&stmt_input_com_x)?;
+        input_coin_var_com.y.enforce_equal(&stmt_input_com_y)?;
 
+        //--------------- KZG commitment for unspent coin ------------------
+        // we will now do the same thing for the unspent coin.
+        // We do this not because we need to reveal the commitment, but
+        // because we will prove some properties about the coin, namely
+        // that it exists in the merkle tree and that the nullifier is
+        // computed correctly. We will also prove that the coin is owned.
+        
+        let unspent_coin_record = self.unspent_coin_record.borrow();
+
+        let unspent_coin_var = JZRecordVar::<8>::new_witness(
+            cs.clone(),
+            || Ok(unspent_coin_record)
+        ).unwrap();
+
+        // fire off the constraint generation which will include the 
+        // circuitry to compute the KZG commitment
+        record_commitment::constraints::generate_constraints(
+            cs.clone(),
+            &crs_var,
+            &unspent_coin_var
+        ).unwrap();
+
+        // We will later prove that the input_coin_var_com belongs
+        // in the merkle tree.
+
+        /*
         //--------------- Merkle tree proof ------------------
         // Here, we will prove that the commitment to the spent coin
         // exists in the merkle tree of all created coins
 
         let proof_var = JZVectorCommitmentOpeningProofVar::new_witness(
             cs.clone(),
-            || Ok(&self.merkle_proof)
+            || Ok(&self.unspent_coin_existence_proof)
         ).unwrap();
 
         let root_com_x = ark_bls12_377::constraints::FqVar::new_input(
             ark_relations::ns!(cs, "input_root_x"), 
-            || { Ok(self.merkle_proof.root.x) },
+            || { Ok(self.unspent_coin_existence_proof.root.x) },
         ).unwrap();
 
         let root_com_y = ark_bls12_377::constraints::FqVar::new_input(
             ark_relations::ns!(cs, "input_root_y"), 
-            || { Ok(self.merkle_proof.root.y) },
+            || { Ok(self.unspent_coin_existence_proof.root.y) },
         ).unwrap();
 
         proof_var.root_var.x.enforce_equal(&root_com_x)?;
         proof_var.root_var.y.enforce_equal(&root_com_y)?;
 
+        // generate the merkle proof verification circuitry
         vector_commitment::bytes::constraints::generate_constraints(
             cs.clone(), &merkle_params_var, &proof_var
         );
+        */
 
         // -------------------- Nullifier -----------------------
         // we now prove that the nullifier within the statement is computed correctly
@@ -355,19 +377,21 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
         // we use the same idea as zCash here, where nullifier = PRF(rho; sk)
         let prf_instance_nullifier = JZPRFInstance::new(
             &self.prf_params,
-            self.spent_coin_record.fields[RHO].as_slice(),
+            self.unspent_coin_record.fields[RHO].as_slice(),
             &self.sk
         );
 
-        let nullifier_prf_f = BigInt::<6>::from_bits_le(
-            &utils::bytes_to_bits(
-                &prf_instance_nullifier.evaluate()
-            )
-        );
-
-        let nullifier_x_var = ark_bls12_377::constraints::FqVar::new_input(
+        // allocate the nullifier as an input variable in the statement
+        let stmt_nullifier_x_var = ark_bls12_377::constraints::FqVar::new_input(
             ark_relations::ns!(cs, "nullifier_prf"), 
-            || { Ok(ark_bls12_377::Fq::from(nullifier_prf_f)) },
+            || { Ok(ark_bls12_377::Fq::from(
+                    BigInt::<6>::from_bits_le(
+                        &utils::bytes_to_bits(
+                            &prf_instance_nullifier.evaluate()
+                        )
+                    )
+                ))
+                },
         ).unwrap();
 
         let nullifier_prf_instance_var = JZPRFInstanceVar::new_witness(
@@ -375,33 +399,84 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
             || Ok(prf_instance_nullifier)
         ).unwrap();
 
+        // trigger the constraint generation for the PRF instance
         prf::constraints::generate_constraints(
-            cs.clone(), &prf_params_var, &nullifier_prf_instance_var
+            cs.clone(),
+            &prf_params_var,
+            &nullifier_prf_instance_var
         );
 
-        //--------------- Binding the four ------------------
-
-        let coin_com_affine = coin_var.commitment.to_affine().unwrap();
-        // just compare the x-coordinate...that's what compressed mode stores anyways
-        // see ark_ec::models::short_weierstrass::GroupAffine::to_bytes
-        let mut com_byte_vars: Vec::<UInt8<ConstraintF>> = Vec::new();
-        com_byte_vars.extend_from_slice(&coin_com_affine.x.to_bytes()?);
-
-        for (i, byte_var) in com_byte_vars.iter().enumerate() {
-            // the serialization impl for CanonicalSerialize does x first
-            byte_var.enforce_equal(&proof_var.leaf_var[i])?;
-        }
-
-        // prove ownership of the coin. Does sk correspond to coin's pk?
-        for (i, byte_var) in coin_var.fields[OWNER].iter().enumerate() {
-            byte_var.enforce_equal(&prf_instance_var.output_var[i])?;
-        }
-
-        // prove PRF output of nullifier
-        let mut prf_byte_vars: Vec::<UInt8<ConstraintF>> = Vec::new();
-        prf_byte_vars.extend_from_slice(&nullifier_x_var.to_bytes()?);
+        // constrain the nullifier in the statement to equal the PRF output
+        let nullifier_prf_byte_vars: Vec::<UInt8<ConstraintF>> = stmt_nullifier_x_var
+            .to_bytes()?
+            .to_vec();
         for (i, byte_var) in nullifier_prf_instance_var.output_var.iter().enumerate() {
-            byte_var.enforce_equal(&prf_byte_vars[i])?;
+            byte_var.enforce_equal(&nullifier_prf_byte_vars[i])?;
+        }
+
+        //--------------- Private key knowledge ------------------
+        // we will prove that the coin is owned by the spender;
+        // we just invoke the constraint generation for the PRF instance
+
+        // prf_instance_ownership is responsible for proving knowledge
+        // of the secret key corresponding to the coin's public key;
+        // we use the same idea as zCash here, where pk = PRF(0; sk)
+        let ownership_prf_instance = JZPRFInstance::new(
+            &self.prf_params, &[0u8; 32], &self.sk
+        );
+
+        // PRF arguments for the secret witness
+        let ownership_prf_instance_var = JZPRFInstanceVar::new_witness(
+            cs.clone(),
+            || Ok(ownership_prf_instance)
+        ).unwrap();
+
+        // trigger the constraint generation for the PRF instance
+        prf::constraints::generate_constraints(
+            cs.clone(),
+            &prf_params_var,
+            &ownership_prf_instance_var
+        );
+
+        // NOTE: We defer the proof (below) that the PRF output equals the public key of
+        // the unspent coin. For now, we are just instantiating the PRF gadgetry.
+
+        //--------------- Binding all circuit gadgets together ------------------
+
+        // 1. constrain the sk variable in both PRFs
+        for (i, byte_var) in ownership_prf_instance_var.key_var.iter().enumerate() {
+            byte_var.enforce_equal(&nullifier_prf_instance_var.key_var[i])?;
+        }
+
+        // 2. constrain the nullifier PRF input to be the unspent coin's rho value
+        for (i, byte_var) in nullifier_prf_instance_var.input_var.iter().enumerate() {
+            byte_var.enforce_equal(&unspent_coin_var.fields[RHO][i])?;
+        }
+
+        // 1. constrain the unspent coin to have the same value and owner as the input coin
+        let matching_fields = vec![OWNER, AMOUNT, ASSET_ID, ENTROPY, RHO]; //let's do others too
+        for field in matching_fields {
+            for (i, byte_var) in unspent_coin_var.fields[field].iter().enumerate() {
+                byte_var.enforce_equal(&input_coin_var.fields[field][i])?;
+            }
+        }
+
+        // 2. let us first constrain the merkle leaf node to equal the unspent coin's commitment
+        let unspent_coin_com_byte_vars: Vec::<UInt8<ConstraintF>> = unspent_coin_var
+            .commitment // grab the commitment variable
+            .to_affine().unwrap() // we always build constraints over the affine repr
+            .x // we build a merkle tree out of the x-coordinates
+            .to_bytes()? // let's use arkworks' to_bytes gadget
+            .to_vec();
+        // constrain equality w.r.t. to the leaf node, byte by byte
+        for (i, byte_var) in unspent_coin_com_byte_vars.iter().enumerate() {
+            // the serialization impl for CanonicalSerialize does x first
+            //byte_var.enforce_equal(&proof_var.leaf_var[i])?;
+        }
+
+        // 3. prove ownership of the coin. Does sk correspond to coin's pk?
+        for (i, byte_var) in unspent_coin_var.fields[OWNER].iter().enumerate() {
+            byte_var.enforce_equal(&ownership_prf_instance_var.output_var[i])?;
         }
 
         Ok(())
@@ -427,7 +502,7 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
                 vec![0u8; 31], //owner
                 vec![0u8; 31], //asset id
                 vec![0u8; 31], //amount
-                vec![AppId::LOTTERY as u8], //app id
+                vec![AppId::OWNED as u8], //app id
                 vec![0u8; 31],
                 vec![0u8; 31],
                 vec![0u8; 31],
@@ -451,9 +526,10 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
             prf_params: prf_params,
             vc_params: vc_params,
             sk: [0u8; 32],
-            spent_coin_record: coins[0].clone(), // doesn;t matter what value the coin has
-            placeholder_output_coin_record: coins[1].clone(), // doesn't matter what value
-            merkle_proof: merkle_proof,
+            unspent_coin_record: coins[0].clone(), // doesn't matter what value the coin has
+            input_coin_record: coins[0].clone(), // again, doesn't matter what value
+            placeholder_output_coin_record: coins[0].clone(), // doesn't matter what value
+            unspent_coin_existence_proof: merkle_proof,
         }
     };
 
@@ -466,9 +542,10 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
 
 pub fn generate_groth_proof(
     pk: &ProvingKey<BW6_761>,
-    coins: &Vec<JZRecord<8>>,
-    coin_index: usize,
+    unspent_coin: &JZRecord<8>,
+    app_input_coin: &JZRecord<8>,
     placeholder_coin: &JZRecord<8>,
+    unspent_coin_existence_proof: &JZVectorCommitmentOpeningProof<ark_bls12_377::G1Affine>,
     sk: &[u8; 32]
 ) -> (Proof<BW6_761>, Vec<ConstraintF>) {
     let seed = [0u8; 32];
@@ -480,21 +557,9 @@ pub fn generate_groth_proof(
     let vc_params = JZVectorCommitmentParams::trusted_setup(&mut rng);
     let crs = JZKZGCommitmentParams::<8>::trusted_setup(&mut rng);
 
-    let records = coins
-        .iter()
-        .map(|coin| coin.commitment().into_affine())
-        .collect::<Vec<_>>();
-    
-    let db = JZVectorDB::<ark_bls12_377::G1Affine>::new(&vc_params, &records);
-    let merkle_proof = JZVectorCommitmentOpeningProof {
-        root: db.commitment(),
-        record: db.get_record(coin_index).clone(),
-        path: db.proof(coin_index),
-    };
-
     let prf_instance_nullifier = JZPRFInstance::new(
         &prf_params,
-        coins[coin_index].fields[RHO].as_slice(),
+        unspent_coin.fields[RHO].as_slice(),
         sk
     );
 
@@ -503,18 +568,27 @@ pub fn generate_groth_proof(
         prf_params: prf_params,
         vc_params: vc_params,
         sk: sk.clone(),
-        // all fields of the spent coin is a secret witness in the proof generation
-        spent_coin_record: coins[coin_index].clone(),
-        // all fields of the placeholder coin are also a secret witness
+        unspent_coin_record: unspent_coin.clone(),
+        input_coin_record: app_input_coin.clone(),
         placeholder_output_coin_record: placeholder_coin.clone(),
-        merkle_proof: merkle_proof,
+        unspent_coin_existence_proof: unspent_coin_existence_proof.clone(),
     };
 
-    let blinded_com = circuit.spent_coin_record.blinded_commitment().into_affine();
-    let placeholder_com = circuit.placeholder_output_coin_record.commitment().into_affine();
+    // native computation of the input coin's commitment
+    // Recall that the input coin is derived from the unspent coin, and blinded
+    let blinded_input_coin_com = circuit.input_coin_record
+        .blinded_commitment()
+        .into_affine();
 
-    let input_root = circuit.merkle_proof.root;
+    // native computation of the placeholder output coin's commitment
+    let placeholder_output_coin_com = circuit.placeholder_output_coin_record
+        .commitment()
+        .into_affine();
 
+    // we already computed the merkle root above
+    let input_root = circuit.unspent_coin_existence_proof.root;
+
+    // native computation of the unspent coin's nullifier
     let nullifier = ConstraintF::from(
             BigInt::<6>::from_bits_le(
             &utils::bytes_to_bits(
@@ -524,12 +598,12 @@ pub fn generate_groth_proof(
     );
 
     let public_inputs = vec![
-        placeholder_com.x,
-        placeholder_com.y,
-        blinded_com.x,
-        blinded_com.y,
-        input_root.x,
-        input_root.y,
+        placeholder_output_coin_com.x,
+        placeholder_output_coin_com.y,
+        blinded_input_coin_com.x,
+        blinded_input_coin_com.y,
+        // input_root.x,
+        // input_root.y,
         nullifier
     ];
 

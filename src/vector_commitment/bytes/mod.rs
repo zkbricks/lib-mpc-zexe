@@ -47,6 +47,7 @@ pub struct JZVectorDB<L: CanonicalSerialize + Clone> {
     marker: PhantomData<L>
 }
 
+#[derive(Clone)]
 pub struct JZVectorCommitmentOpeningProof<L: CanonicalSerialize + Clone> {
     pub path: Path<JubJubMerkleTreeParams>,
     pub record: L,

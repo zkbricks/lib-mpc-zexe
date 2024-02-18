@@ -63,20 +63,20 @@ async fn verify_lottery_tx(
                 .mul_bigint(amount_correction.into_bigint())
                 .into_affine();
 
-            let mut com = ark_bls12_377::G1Affine::new(public_inputs[0], public_inputs[1]);
-            com = com.add(&correction_group_elem).into_affine();
+            let mut placeholder_com = ark_bls12_377::G1Affine::new(public_inputs[0], public_inputs[1]);
+            placeholder_com = placeholder_com.add(&correction_group_elem).into_affine();
 
             // check that the plonk proof is using the commitment we computed here
-            assert_eq!(com.x(), plonk_proof.output_coins_com[output_coin_index].x());
-            assert_eq!(com.y(), plonk_proof.output_coins_com[output_coin_index].y());
+            assert_eq!(placeholder_com.x(), plonk_proof.output_coins_com[output_coin_index].x());
+            assert_eq!(placeholder_com.y(), plonk_proof.output_coins_com[output_coin_index].y());
 
             output_coin_index += 1;
         }
 
-        // verify that (commitments of) spent coins match in collaborative and local proofs
-        let com = ark_bls12_377::G1Affine::new(public_inputs[2], public_inputs[3]);
-        assert_eq!(com.x(), plonk_proof.input_coins_com[i].x());
-        assert_eq!(com.y(), plonk_proof.input_coins_com[i].y());
+        // verify that (commitments of) app-input coins match in collaborative and local proofs
+        let input_com = ark_bls12_377::G1Affine::new(public_inputs[2], public_inputs[3]);
+        assert_eq!(input_com.x(), plonk_proof.input_coins_com[i].x());
+        assert_eq!(input_com.y(), plonk_proof.input_coins_com[i].y());
     }
 
 

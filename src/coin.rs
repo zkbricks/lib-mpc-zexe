@@ -10,7 +10,7 @@ pub const APP_INPUT_1: usize = 6;
 pub const RHO: usize = 7;
 
 pub enum AppId {
-	PAYMENT = 0,
+	OWNED = 0,
 	LOTTERY = 1,
 	SWAP = 2,
 	TRADE = 3,

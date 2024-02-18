@@ -1,3 +1,6 @@
+use lib_mpc_zexe::vector_commitment::bytes::JZVectorCommitmentOpeningProof;
+use lib_mpc_zexe::vector_commitment::bytes::JZVectorCommitmentParams;
+use lib_mpc_zexe::vector_commitment::bytes::JZVectorDB;
 use reqwest::Client;
 use rand_chacha::rand_core::SeedableRng;
 use std::time::Instant;
@@ -5,6 +8,7 @@ use clap::{App, Arg};
 
 use ark_ff::{*};
 use ark_std::{*, rand::RngCore};
+use ark_ec::CurveGroup;
 
 use lib_mpc_zexe::coin::*;
 use lib_mpc_zexe::apps::lottery;
@@ -73,7 +77,7 @@ fn airdrop() -> Vec<JZRecord<8>> {
             pubk.to_vec(), //owner
             create_array(1).to_vec(), //asset id
             create_array(amount).to_vec(), //amount
-            vec![AppId::LOTTERY as u8], //app id
+            vec![AppId::OWNED as u8], //app id
             vec![0u8; 31],
             vec![0u8; 31],
             vec![0u8; 31],
@@ -85,6 +89,15 @@ fn airdrop() -> Vec<JZRecord<8>> {
 
     coins
 }
+
+
+fn create_lottery_app_coin(template: &JZRecord<8>) -> JZRecord<8> {
+    let mut coin = template.clone();
+    coin.fields[APP_ID] = vec![AppId::LOTTERY as u8];
+
+    coin
+}
+
 
 fn create_placeholder_coin(template: &JZRecord<8>) -> JZRecord<8> {
     let seed = [0u8; 32];
@@ -104,7 +117,7 @@ fn create_placeholder_coin(template: &JZRecord<8>) -> JZRecord<8> {
         template.fields[OWNER].clone(), //owner
         template.fields[ASSET_ID].clone(), //asset id
         amount.to_vec(), //amount
-        template.fields[APP_ID].clone(), //app id
+        vec![AppId::OWNED as u8], //app id
         vec![0u8; 31],
         vec![0u8; 31],
         vec![0u8; 31],
@@ -149,48 +162,87 @@ async fn main() -> reqwest::Result<()> {
 
     let coins = airdrop();
 
+    let records = coins
+        .iter()
+        .map(|coin| coin.commitment().into_affine())
+        .collect::<Vec<_>>();
+
+    let seed = [0u8; 32];
+    let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
+
+    let vc_params = JZVectorCommitmentParams::trusted_setup(&mut rng);
+    let db = JZVectorDB::<ark_bls12_377::G1Affine>::new(&vc_params, &records);
+
     let now = Instant::now();
+
+    let alice_merkle_proof = JZVectorCommitmentOpeningProof {
+        root: db.commitment(),
+        record: db.get_record(0).clone(),
+        path: db.proof(0),
+    };
     let (alice_proof, alice_public_inputs) = lottery::generate_groth_proof(
-        &pk, &coins, 0, &create_placeholder_coin(&coins[0]), &alice_key().0
+        &pk,
+        &coins[0],
+        &create_lottery_app_coin(&coins[0]),
+        &create_placeholder_coin(&coins[0]),
+        &alice_merkle_proof,
+        &alice_key().0
     );
     println!("proof generated in {}.{} secs",
         now.elapsed().as_secs(), now.elapsed().subsec_millis()
     );
 
+    let bob_merkle_proof = JZVectorCommitmentOpeningProof {
+        root: db.commitment(),
+        record: db.get_record(1).clone(),
+        path: db.proof(1),
+    };
     let (bob_proof, bob_public_inputs) = lottery::generate_groth_proof(
-        &pk, &coins, 1, &create_placeholder_coin(&coins[1]), &bob_key().0
+        &pk,
+        &coins[1],
+        &create_lottery_app_coin(&coins[1]),
+        &create_placeholder_coin(&coins[1]),
+        &bob_merkle_proof,
+        &bob_key().0
     );
 
-    let bs58_coins = coins
-        .iter()
-        .map(|coin| protocol::coin_to_bs58(&coin.blinded_fields()))
-        .collect::<Vec<_>>();
-
-    //FgvRhbyZhrB85i3Xui9iB7UjF92zVkREtcw2E1aV2y1R
-    println!("Alice's public key: {:?}", bs58_coins[0].fields[OWNER]);
-    //FfMcCs8a2Bnpo5UxkWX4APHJunSys5SDhmMuV9rfsCf9
-    println!("Bob's public key: {:?}", bs58_coins[1].fields[OWNER]);
+    // //FgvRhbyZhrB85i3Xui9iB7UjF92zVkREtcw2E1aV2y1R
+    // println!("Alice's public key: {:?}", bs58_coins[0].fields[OWNER]);
+    // //FfMcCs8a2Bnpo5UxkWX4APHJunSys5SDhmMuV9rfsCf9
+    // println!("Bob's public key: {:?}", bs58_coins[1].fields[OWNER]);
     
     //list_orders().await?;
     submit_order(
         protocol::LotteryOrder {
             input_coin:
-                bs58_coins[0].clone(),
+                protocol::coin_to_bs58(
+                    &create_lottery_app_coin(&coins[0]).blinded_fields()
+                ),
             input_coin_local_proof:
-                protocol::groth_proof_to_bs58(&alice_proof, &alice_public_inputs),
+                protocol::groth_proof_to_bs58(
+                    &alice_proof, &alice_public_inputs
+                ),
             placeholder_output_coin:
-                protocol::coin_to_bs58(&create_placeholder_coin(&coins[0]).fields())
+                protocol::coin_to_bs58(
+                    &create_placeholder_coin(&coins[0]).fields()
+                )
         }
     ).await?;
     //list_orders().await?;
     submit_order(
         protocol::LotteryOrder {
             input_coin:
-                bs58_coins[1].clone(),
+                protocol::coin_to_bs58(
+                    &create_lottery_app_coin(&coins[1]).blinded_fields()
+                ),
             input_coin_local_proof:
-                protocol::groth_proof_to_bs58(&bob_proof, &bob_public_inputs),
+                protocol::groth_proof_to_bs58(
+                    &bob_proof, &bob_public_inputs
+                ),
             placeholder_output_coin:
-                protocol::coin_to_bs58(&create_placeholder_coin(&coins[1]).fields())
+                protocol::coin_to_bs58(
+                    &create_placeholder_coin(&coins[1]).fields()
+                )
         }
     ).await?;
     //list_orders().await?;
