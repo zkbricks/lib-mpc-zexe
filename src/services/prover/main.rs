@@ -1,10 +1,8 @@
 use actix_web::{web, App, HttpServer};
 use lib_mpc_zexe::coin::AMOUNT;
 use std::sync::Mutex;
-use rand_chacha::rand_core::SeedableRng;
 use reqwest::Client;
 
-use lib_mpc_zexe::record_commitment::JZKZGCommitmentParams;
 use lib_mpc_zexe::collaborative_snark::plonk::*;
 use lib_mpc_zexe::apps;
 use lib_mpc_zexe::protocol as protocol;
@@ -17,13 +15,6 @@ struct GlobalAppState {
     db: Mutex<AppStateType>, // <- Mutex is necessary to mutate safely across threads
 }
 
-fn extract_crs() -> JZKZGCommitmentParams<8> {
-    let seed = [0u8; 32];
-    let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
-
-    JZKZGCommitmentParams::<8>::trusted_setup(&mut rng)
-}
-
 async fn submit_lottery_tx(
     data: web::Data<GlobalAppState>,
     lottery_tx: web::Json<protocol::LotteryMatch>
@@ -31,7 +22,7 @@ async fn submit_lottery_tx(
     let mut _db = data.db.lock().unwrap();
     let tx = lottery_tx.into_inner();
 
-    let crs = extract_crs();
+    let (_, _, crs) = protocol::trusted_setup();
 
     let input_coins: Vec<[F; 8]> = tx.input_orders
         .iter()

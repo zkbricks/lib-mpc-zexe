@@ -60,8 +60,6 @@ impl<L: CanonicalSerialize + Clone> JZVectorDB<L> {
         params: &JZVectorCommitmentParams,
         records: &[L]
     ) -> Self {
-        // let mut rng = ark_std::test_rng();
-        // let vc_params = JZVectorCommitmentParams::trusted_setup(&mut rng);
 
         let leaves: Vec<_> = records
             .iter()

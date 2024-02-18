@@ -1,4 +1,5 @@
 use ark_bw6_761::BW6_761;
+use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
 
 use ark_std::io::Cursor;
@@ -8,6 +9,9 @@ use ark_groth16::*;
 
 use crate::coin::*;
 use crate::collaborative_snark::plonk::*;
+use crate::prf::JZPRFParams;
+use crate::record_commitment::JZKZGCommitmentParams;
+use crate::vector_commitment::bytes::JZVectorCommitmentParams;
 
 
 type Curve = ark_bls12_377::Bls12_377;
@@ -324,4 +328,17 @@ fn encode_g1_as_bs58_str(value: &G1Affine) -> String {
     let mut serialized_msg: Vec<u8> = Vec::new();
     value.serialize_compressed(&mut serialized_msg).unwrap();
     bs58::encode(serialized_msg).into_string()
+}
+
+pub fn trusted_setup() -> (JZPRFParams, JZVectorCommitmentParams, JZKZGCommitmentParams<8>) {
+    let seed = [0u8; 32];
+    let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
+
+    // TODO: for now we sample the public parameters directly;
+    // we should change this to load from a file produced by a trusted setup
+    let prf_params = JZPRFParams::trusted_setup(&mut rng);
+    let vc_params = JZVectorCommitmentParams::trusted_setup(&mut rng);
+    let crs = JZKZGCommitmentParams::<8>::trusted_setup(&mut rng);
+
+    (prf_params, vc_params, crs)
 }

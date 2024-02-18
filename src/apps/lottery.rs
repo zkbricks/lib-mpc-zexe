@@ -13,7 +13,7 @@ use ark_snark::SNARK;
 use ark_poly::univariate::DensePolynomial;
 use ark_poly::Polynomial;
 
-use crate::utils;
+use crate::{protocol, utils};
 use crate::collaborative_snark::plonk::PlonkProof;
 use crate::{vector_commitment, record_commitment, prf};
 use crate::vector_commitment::bytes::{*, constraints::*};
@@ -340,7 +340,6 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
         // We will later prove that the input_coin_var_com belongs
         // in the merkle tree.
 
-        /*
         //--------------- Merkle tree proof ------------------
         // Here, we will prove that the commitment to the spent coin
         // exists in the merkle tree of all created coins
@@ -360,14 +359,13 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
             || { Ok(self.unspent_coin_existence_proof.root.y) },
         ).unwrap();
 
-        proof_var.root_var.x.enforce_equal(&root_com_x)?;
-        proof_var.root_var.y.enforce_equal(&root_com_y)?;
-
         // generate the merkle proof verification circuitry
         vector_commitment::bytes::constraints::generate_constraints(
             cs.clone(), &merkle_params_var, &proof_var
         );
-        */
+
+        proof_var.root_var.x.enforce_equal(&root_com_x)?;
+        proof_var.root_var.y.enforce_equal(&root_com_y)?;
 
         // -------------------- Nullifier -----------------------
         // we now prove that the nullifier within the statement is computed correctly
@@ -471,7 +469,7 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
         // constrain equality w.r.t. to the leaf node, byte by byte
         for (i, byte_var) in unspent_coin_com_byte_vars.iter().enumerate() {
             // the serialization impl for CanonicalSerialize does x first
-            //byte_var.enforce_equal(&proof_var.leaf_var[i])?;
+            byte_var.enforce_equal(&proof_var.leaf_var[i])?;
         }
 
         // 3. prove ownership of the coin. Does sk correspond to coin's pk?
@@ -484,14 +482,10 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
 }
 
 pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
-    let seed = [0u8; 32];
-    let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
 
     // create a circuit with a dummy witness
     let circuit = {
-        let prf_params = JZPRFParams::trusted_setup(&mut rng);
-        let crs = JZKZGCommitmentParams::<8>::trusted_setup(&mut rng);
-        let vc_params = JZVectorCommitmentParams::trusted_setup(&mut rng);
+        let (prf_params, vc_params, crs) = protocol::trusted_setup();
     
         let mut coins = Vec::new();
         let mut records = Vec::new();
@@ -533,6 +527,9 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
         }
     };
 
+    let seed = [0u8; 32];
+    let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
+
     let (pk, vk) = Groth16::<BW6_761>::
         circuit_specific_setup(circuit, &mut rng)
         .unwrap();
@@ -548,14 +545,8 @@ pub fn generate_groth_proof(
     unspent_coin_existence_proof: &JZVectorCommitmentOpeningProof<ark_bls12_377::G1Affine>,
     sk: &[u8; 32]
 ) -> (Proof<BW6_761>, Vec<ConstraintF>) {
-    let seed = [0u8; 32];
-    let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
 
-    // TODO: for now we sample the public parameters directly;
-    // we should change this to load from a file produced by a trusted setup
-    let prf_params = JZPRFParams::trusted_setup(&mut rng);
-    let vc_params = JZVectorCommitmentParams::trusted_setup(&mut rng);
-    let crs = JZKZGCommitmentParams::<8>::trusted_setup(&mut rng);
+    let (prf_params, vc_params, crs) = protocol::trusted_setup();
 
     let prf_instance_nullifier = JZPRFInstance::new(
         &prf_params,
@@ -602,10 +593,13 @@ pub fn generate_groth_proof(
         placeholder_output_coin_com.y,
         blinded_input_coin_com.x,
         blinded_input_coin_com.y,
-        // input_root.x,
-        // input_root.y,
+        input_root.x,
+        input_root.y,
         nullifier
     ];
+
+    let seed = [0u8; 32];
+    let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
 
     let proof = Groth16::<BW6_761>::prove(&pk, circuit, &mut rng).unwrap();
     

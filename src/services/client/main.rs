@@ -1,5 +1,4 @@
 use lib_mpc_zexe::vector_commitment::bytes::JZVectorCommitmentOpeningProof;
-use lib_mpc_zexe::vector_commitment::bytes::JZVectorCommitmentParams;
 use lib_mpc_zexe::vector_commitment::bytes::JZVectorDB;
 use reqwest::Client;
 use rand_chacha::rand_core::SeedableRng;
@@ -51,7 +50,7 @@ fn airdrop() -> Vec<JZRecord<8>> {
     let seed = [0u8; 32];
     let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
 
-    let crs = JZKZGCommitmentParams::<8>::trusted_setup(&mut rng);
+    let (_, _, crs) = protocol::trusted_setup();
 
     // Anonymous function to generate an array
     let create_array = |input: u8| -> [u8; 31] {
@@ -100,10 +99,11 @@ fn create_lottery_app_coin(template: &JZRecord<8>) -> JZRecord<8> {
 
 
 fn create_placeholder_coin(template: &JZRecord<8>) -> JZRecord<8> {
+    
+    let (_, _, crs) = protocol::trusted_setup();
+    
     let seed = [0u8; 32];
     let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
-
-    let crs = JZKZGCommitmentParams::<8>::trusted_setup(&mut rng);
 
     let mut entropy = [0u8; 31];
     rng.fill_bytes(&mut entropy);
@@ -167,10 +167,8 @@ async fn main() -> reqwest::Result<()> {
         .map(|coin| coin.commitment().into_affine())
         .collect::<Vec<_>>();
 
-    let seed = [0u8; 32];
-    let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
-
-    let vc_params = JZVectorCommitmentParams::trusted_setup(&mut rng);
+    let (_, vc_params, _) = protocol::trusted_setup();
+    
     let db = JZVectorDB::<ark_bls12_377::G1Affine>::new(&vc_params, &records);
 
     let now = Instant::now();

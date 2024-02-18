@@ -7,10 +7,8 @@ use ark_snark::SNARK;
 use lib_mpc_zexe::coin::AMOUNT;
 use std::ops::Add;
 use std::sync::Mutex;
-use rand_chacha::rand_core::SeedableRng;
 use std::time::Instant;
 
-use lib_mpc_zexe::record_commitment::JZKZGCommitmentParams;
 use lib_mpc_zexe::collaborative_snark::plonk::*;
 use lib_mpc_zexe::apps;
 use lib_mpc_zexe::protocol as protocol;
@@ -19,13 +17,6 @@ type AppStateType = Vec<protocol::AppTransaction>;
 
 struct GlobalAppState {
     db: Mutex<AppStateType>, // <- Mutex is necessary to mutate safely across threads
-}
-
-fn extract_crs() -> JZKZGCommitmentParams<8> {
-    let seed = [0u8; 32];
-    let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
-
-    JZKZGCommitmentParams::<8>::trusted_setup(&mut rng)
 }
 
 fn extract_vk() -> VerifyingKey<BW6_761> {
@@ -39,7 +30,7 @@ async fn verify_lottery_tx(
 ) -> String {
     let mut db = data.db.lock().unwrap();
 
-    let crs = extract_crs();
+    let (_, _, crs) = protocol::trusted_setup();
     let vk = extract_vk();
 
     let proof = proof.into_inner();
@@ -90,6 +81,8 @@ async fn verify_lottery_tx(
             &groth_proof
         ).unwrap();
         assert!(valid_proof);
+
+        println!("verified groth proof");
     }
 
     // verify the collaborative proof
