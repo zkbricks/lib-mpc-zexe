@@ -43,9 +43,11 @@ async fn on_ramp_tx(
     assert!(valid_proof);
 
     let com = ark_bls12_377::G1Affine::new(
-        public_inputs[0], public_inputs[1]
+        public_inputs[apps::onramp::GrothPublicInput::COIN_COM_X as usize],
+        public_inputs[apps::onramp::GrothPublicInput::COIN_COM_Y as usize]
     );
 
+    // add the coin to the state
     let mut state = global_state.state.lock().unwrap();
 
     let index = (*state).num_coins;

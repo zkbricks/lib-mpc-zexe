@@ -3,7 +3,7 @@ use lib_mpc_zexe::vector_commitment::bytes::JZVectorDB;
 use reqwest::Client;
 use rand_chacha::rand_core::SeedableRng;
 use std::time::Instant;
-use clap::{App, Arg};
+//use clap::{App, Arg};
 
 use ark_ff::{*};
 use ark_std::{*, rand::RngCore};
@@ -11,9 +11,25 @@ use ark_ec::CurveGroup;
 
 use lib_mpc_zexe::coin::*;
 use lib_mpc_zexe::apps::lottery;
+use lib_mpc_zexe::apps::onramp;
 use lib_mpc_zexe::record_commitment::*;
 use lib_mpc_zexe::protocol as protocol;
 
+async fn onramp_order(item: protocol::OnRampTransaction) -> reqwest::Result<()> {
+    let client = Client::new();
+    let response = client.post("http://127.0.0.1:8082/onramp")
+        .json(&item)
+        .send()
+        .await?;
+
+    if response.status().is_success() {
+        println!("submitted onramp order to zkBricks L1 contract...");
+    } else {
+        println!("Failed to create item: {:?}", response.status());
+    }
+
+    Ok(())
+}
 
 async fn submit_order(item: protocol::LotteryOrder) -> reqwest::Result<()> {
     let client = Client::new();
@@ -23,7 +39,7 @@ async fn submit_order(item: protocol::LotteryOrder) -> reqwest::Result<()> {
         .await?;
     
     if response.status().is_success() {
-        println!("Item created successfully");
+        println!("submitted lottery order to zkBricks lottery subnet...");
     } else {
         println!("Failed to create item: {:?}", response.status());
     }
@@ -38,7 +54,7 @@ async fn perform_lottery() -> reqwest::Result<()> {
         .await?;
     
     if response.status().is_success() {
-        println!("Lottery executed successfully");
+        println!("invoking the lottery event...");
     } else {
         println!("Failed to execute lottery: {:?}", response.status());
     }
@@ -126,6 +142,7 @@ fn create_placeholder_coin(template: &JZRecord<8>) -> JZRecord<8> {
     JZRecord::<8>::new(&crs, &fields, &[0u8; 31].to_vec())
 }
 
+/*
 fn parse_args() {
     let matches = App::new("zkBricks Client")
     .version("1.0")
@@ -153,12 +170,15 @@ fn parse_args() {
     println!("Username: {}", username);
     println!("Verbosity level: {}", verbosity);
 }
+*/
 
 #[tokio::main]
 async fn main() -> reqwest::Result<()> {
-    parse_args();
-    
-    let (pk, _vk) = lottery::circuit_setup();
+    //parse_args();
+    let (_, vc_params, _) = protocol::trusted_setup();
+
+    let (lottery_pk, _) = lottery::circuit_setup();
+    let (onramp_pk, _) = onramp::circuit_setup();
 
     let coins = airdrop();
 
@@ -166,10 +186,27 @@ async fn main() -> reqwest::Result<()> {
         .iter()
         .map(|coin| coin.commitment().into_affine())
         .collect::<Vec<_>>();
-
-    let (_, vc_params, _) = protocol::trusted_setup();
     
     let db = JZVectorDB::<ark_bls12_377::G1Affine>::new(&vc_params, &records);
+
+    onramp_order(
+        protocol::OnRampTransaction {
+            proof: {
+                let groth_proof = onramp::generate_groth_proof(&onramp_pk,&coins[0]);
+                protocol::groth_proof_to_bs58(&groth_proof.0, &groth_proof.1)
+            }
+        }
+    ).await?;
+
+    onramp_order(
+        protocol::OnRampTransaction {
+            proof: {
+                let groth_proof = onramp::generate_groth_proof(&onramp_pk,&coins[1]);
+                protocol::groth_proof_to_bs58(&groth_proof.0, &groth_proof.1)
+            }
+        }
+    ).await?;
+
 
     let now = Instant::now();
 
@@ -179,7 +216,7 @@ async fn main() -> reqwest::Result<()> {
         path: db.proof(0),
     };
     let (alice_proof, alice_public_inputs) = lottery::generate_groth_proof(
-        &pk,
+        &lottery_pk,
         &coins[0],
         &create_lottery_app_coin(&coins[0]),
         &create_placeholder_coin(&coins[0]),
@@ -196,7 +233,7 @@ async fn main() -> reqwest::Result<()> {
         path: db.proof(1),
     };
     let (bob_proof, bob_public_inputs) = lottery::generate_groth_proof(
-        &pk,
+        &lottery_pk,
         &coins[1],
         &create_lottery_app_coin(&coins[1]),
         &create_placeholder_coin(&coins[1]),
@@ -208,7 +245,7 @@ async fn main() -> reqwest::Result<()> {
     // println!("Alice's public key: {:?}", bs58_coins[0].fields[OWNER]);
     // //FfMcCs8a2Bnpo5UxkWX4APHJunSys5SDhmMuV9rfsCf9
     // println!("Bob's public key: {:?}", bs58_coins[1].fields[OWNER]);
-    
+
     //list_orders().await?;
     submit_order(
         protocol::LotteryOrder {
@@ -226,6 +263,7 @@ async fn main() -> reqwest::Result<()> {
                 )
         }
     ).await?;
+
     //list_orders().await?;
     submit_order(
         protocol::LotteryOrder {
