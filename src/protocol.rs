@@ -39,7 +39,7 @@ pub struct LotteryMatch {
     pub amount_correction: FieldElementBs58,
 }
 
-/// ValidityProof is submitted by the MPC subnet to the L1 contract
+/// AppTransaction is submitted by the MPC subnet to the L1 contract
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppTransaction {
     /// Groth16 proofs for spent coin and placeholder coin
@@ -51,6 +51,15 @@ pub struct AppTransaction {
     pub placeholder_selector: Vec<bool>,
     /// the correction to the placeholder coin
     pub amount_correction: Vec<FieldElementBs58>,
+}
+
+/// OnRampTransaction is submitted by the client to the L1 contract
+/// to deposit L1 assets into wrapped L1 assets.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnRampTransaction {
+    /// proof attesting to the validity 
+    /// of the created coin commitment
+    pub proof: GrothProofBs58,
 }
 
 

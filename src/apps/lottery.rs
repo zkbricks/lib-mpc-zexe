@@ -26,6 +26,17 @@ type ConstraintF = ark_bw6_761::Fr;
 // Finite Field used to encode the coin data structure
 type F = ark_bls12_377::Fr;
 
+#[allow(non_camel_case_types)]
+pub enum GrothPublicInput {
+	PLACEHOLDER_OUTPUT_COIN_COM_X = 0,
+	PLACEHOLDER_OUTPUT_COIN_COM_Y = 1,
+	BLINDED_INPUT_COIN_COM_X = 2,
+	BLINDED_INPUT_COIN_COM_Y = 3,
+    INPUT_ROOT_X = 4,
+    INPUT_ROOT_Y = 5,
+    NULLIFIER = 6,
+}
+
 /// collaborative_prover contains the application-specific functionality for
 /// collaborative SNARK proof generation. Specifically, it contains the
 /// logic for deriving constraints (encoded as polynomial identities) 

@@ -4,77 +4,82 @@ use ark_ff::PrimeField;
 use ark_bw6_761::BW6_761;
 use ark_groth16::*;
 use ark_snark::SNARK;
-use lib_mpc_zexe::coin::AMOUNT;
 use std::ops::Add;
 use std::sync::Mutex;
 use std::time::Instant;
 
+use lib_mpc_zexe::coin::*;
+use lib_mpc_zexe::record_commitment::JZRecord;
+use lib_mpc_zexe::vector_commitment::bytes::JZVectorDB;
 use lib_mpc_zexe::collaborative_snark::plonk::*;
 use lib_mpc_zexe::apps;
 use lib_mpc_zexe::protocol as protocol;
 
-type AppStateType = Vec<protocol::AppTransaction>;
-
-struct GlobalAppState {
-    db: Mutex<AppStateType>, // <- Mutex is necessary to mutate safely across threads
+pub struct AppStateType {
+    db: JZVectorDB::<ark_bls12_377::G1Affine>,
+    num_coins: usize,
 }
 
-fn extract_vk() -> VerifyingKey<BW6_761> {
-    let (_pk, vk) = apps::lottery::circuit_setup();
-    vk
+struct GlobalAppState {
+    state: Mutex<AppStateType>, // <- Mutex is necessary to mutate safely across threads
+}
+
+async fn on_ramp_tx(
+    global_state: web::Data<GlobalAppState>,
+    proof: web::Json<protocol::OnRampTransaction>
+) -> String {
+    let (_, vk) = apps::onramp::circuit_setup();
+
+    let on_ramp_proof = proof.into_inner();
+    let (groth_proof, public_inputs) = protocol::groth_proof_from_bs58(
+        &on_ramp_proof.proof
+    );
+
+    let valid_proof = Groth16::<BW6_761>::verify(
+        &vk,
+        &public_inputs,
+        &groth_proof
+    ).unwrap();
+    assert!(valid_proof);
+
+    let com = ark_bls12_377::G1Affine::new(
+        public_inputs[0], public_inputs[1]
+    );
+
+    let mut state = global_state.state.lock().unwrap();
+
+    let index = (*state).num_coins;
+    (*state).db.update(index, &com);
+    (*state).num_coins += 1;
+
+    drop(state);
+    "success".to_string()
 }
 
 async fn verify_lottery_tx(
-    data: web::Data<GlobalAppState>,
+    global_state: web::Data<GlobalAppState>,
     proof: web::Json<protocol::AppTransaction>
 ) -> String {
-    let mut db = data.db.lock().unwrap();
 
     let (_, _, crs) = protocol::trusted_setup();
-    let vk = extract_vk();
+    let (_, vk) = apps::lottery::circuit_setup();
 
-    let proof = proof.into_inner();
-    let plonk_proof = protocol::plonk_proof_from_bs58(&proof.collaborative_prooof);
+    let lottery_proof = proof.into_inner();
+    let plonk_proof = protocol::plonk_proof_from_bs58(
+        &lottery_proof.collaborative_prooof
+    );
 
     let now = Instant::now();
 
     let mut output_coin_index = 0;
-    for i in 0..proof.placeholder_selector.len() {
-        let (_, public_inputs) = protocol::groth_proof_from_bs58(&proof.local_proofs[i]);
+    let mut output_coin_commitments = Vec::new();
 
-        // verify that the (commitments of) output coins in collaborative proof are
-        // equal to the placeholder coins in local proofs, modulo amount corrections
-        if proof.placeholder_selector[i] {
-            let amount_correction = protocol::field_element_from_bs58(
-                &proof.amount_correction[output_coin_index]
-            );
-            let correction_group_elem = crs
-                .crs_lagrange[AMOUNT]
-                .clone()
-                .mul_bigint(amount_correction.into_bigint())
-                .into_affine();
+    for i in 0..lottery_proof.placeholder_selector.len() {
+        let (groth_proof, public_inputs) = protocol::groth_proof_from_bs58(
+            &lottery_proof.local_proofs[i]
+        );
 
-            let mut placeholder_com = ark_bls12_377::G1Affine::new(public_inputs[0], public_inputs[1]);
-            placeholder_com = placeholder_com.add(&correction_group_elem).into_affine();
-
-            // check that the plonk proof is using the commitment we computed here
-            assert_eq!(placeholder_com.x(), plonk_proof.output_coins_com[output_coin_index].x());
-            assert_eq!(placeholder_com.y(), plonk_proof.output_coins_com[output_coin_index].y());
-
-            output_coin_index += 1;
-        }
-
-        // verify that (commitments of) app-input coins match in collaborative and local proofs
-        let input_com = ark_bls12_377::G1Affine::new(public_inputs[2], public_inputs[3]);
-        assert_eq!(input_com.x(), plonk_proof.input_coins_com[i].x());
-        assert_eq!(input_com.y(), plonk_proof.input_coins_com[i].y());
-    }
-
-
-    // verify the local proofs
-    for p in &proof.local_proofs {
-        let (groth_proof, public_inputs) = protocol::groth_proof_from_bs58(&p);
-
+        // first verify the groth proof
         let valid_proof = Groth16::<BW6_761>::verify(
             &vk,
             &public_inputs,
@@ -82,7 +87,40 @@ async fn verify_lottery_tx(
         ).unwrap();
         assert!(valid_proof);
 
-        println!("verified groth proof");
+        // verify that the (commitments of) output coins in collaborative proof are
+        // equal to the placeholder coins in local proofs, modulo amount corrections
+        if lottery_proof.placeholder_selector[i] {
+            let amount_correction = protocol::field_element_from_bs58(
+                &lottery_proof.amount_correction[output_coin_index]
+            );
+            let correction_group_elem = crs
+                .crs_lagrange[AMOUNT]
+                .clone()
+                .mul_bigint(amount_correction.into_bigint())
+                .into_affine();
+
+            let mut placeholder_com = ark_bls12_377::G1Affine::new(
+                public_inputs[apps::lottery::GrothPublicInput::PLACEHOLDER_OUTPUT_COIN_COM_X as usize], 
+                public_inputs[apps::lottery::GrothPublicInput::PLACEHOLDER_OUTPUT_COIN_COM_Y as usize]
+            );
+            placeholder_com = placeholder_com.add(&correction_group_elem).into_affine();
+
+            // check that the plonk proof is using the commitment for output coins that we computed here
+            assert_eq!(placeholder_com.x(), plonk_proof.output_coins_com[output_coin_index].x());
+            assert_eq!(placeholder_com.y(), plonk_proof.output_coins_com[output_coin_index].y());
+
+            output_coin_commitments.push(placeholder_com);
+
+            output_coin_index += 1;
+        }
+
+        // verify that (commitments of) app-input coins match in collaborative and local proofs
+        let input_com = ark_bls12_377::G1Affine::new(
+            public_inputs[apps::lottery::GrothPublicInput::BLINDED_INPUT_COIN_COM_X as usize],
+            public_inputs[apps::lottery::GrothPublicInput::BLINDED_INPUT_COIN_COM_Y as usize]
+        );
+        assert_eq!(input_com.x(), plonk_proof.input_coins_com[i].x());
+        assert_eq!(input_com.y(), plonk_proof.input_coins_com[i].y());
     }
 
     // verify the collaborative proof
@@ -91,13 +129,20 @@ async fn verify_lottery_tx(
         &plonk_proof,
         apps::lottery::collaborative_verifier::<8>
     );
-    
+
     println!("proof verified in {}.{} secs", 
         now.elapsed().as_secs(),
         now.elapsed().subsec_millis()
     );
 
-    (*db).push(proof.clone());
+    let mut state = global_state.state.lock().unwrap();
+    // let's add all the output coins to the state
+    for com in output_coin_commitments {
+        let index = (*state).num_coins;
+        (*state).db.update(index, &com);
+        (*state).num_coins += 1;
+    }
+    drop(state);
 
     "success".to_string()
 }
@@ -107,7 +152,7 @@ async fn verify_lottery_tx(
 async fn main() -> std::io::Result<()> {
     // Note: web::Data created _outside_ HttpServer::new closure
     let app_state = web::Data::new(GlobalAppState {
-        db: Mutex::new(Vec::new()),
+        state: Mutex::new(AppStateType { db: initialize_state(), num_coins: 0 }),
     });
 
     HttpServer::new(move || {
@@ -115,8 +160,33 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(app_state.clone()) // <- register the created data
             .route("/lottery", web::post().to(verify_lottery_tx))
+            .route("/onramp", web::post().to(on_ramp_tx))
     })
     .bind(("127.0.0.1", 8082))?
     .run()
     .await
+}
+
+fn initialize_state() -> JZVectorDB<ark_bls12_377::G1Affine> {
+    let (_, vc_params, crs) = protocol::trusted_setup();
+    
+    let mut records = Vec::new();
+    for _ in 0..64u8 {
+        let fields: [Vec<u8>; 8] = 
+        [
+            vec![0u8; 31], //entropy
+            vec![0u8; 31], //owner
+            vec![0u8; 31], //asset id
+            vec![0u8; 31], //amount
+            vec![AppId::OWNED as u8], //app id
+            vec![0u8; 31],
+            vec![0u8; 31],
+            vec![0u8; 31],
+        ];
+
+        let coin = JZRecord::<8>::new(&crs, &fields, &[0u8; 31].into());
+        records.push(coin.commitment().into_affine());
+    }
+
+    JZVectorDB::<ark_bls12_377::G1Affine>::new(&vc_params, &records)
 }
