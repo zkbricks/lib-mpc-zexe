@@ -36,6 +36,14 @@ impl JZVectorCommitmentParams {
 
 type JubJubMerkleTree = MerkleTree<JubJubMerkleTreeParams>;
 
+pub type JZVectorCommitmentPath = Path<JubJubMerkleTreeParams>;
+pub type JZVectorCommitmentLeafDigest = 
+    <JubJubMerkleTreeParams as ark_crypto_primitives::merkle_tree::Config>
+    ::LeafDigest;
+pub type JZVectorCommitmentInnerDigest = 
+    <JubJubMerkleTreeParams as ark_crypto_primitives::merkle_tree::Config>
+    ::InnerDigest;
+
 pub type JZVectorCommitment = 
     <JubJubMerkleTreeParams as ark_crypto_primitives::merkle_tree::Config>
     ::InnerDigest;

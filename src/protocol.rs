@@ -11,14 +11,103 @@ use crate::coin::*;
 use crate::collaborative_snark::plonk::*;
 use crate::prf::JZPRFParams;
 use crate::record_commitment::JZKZGCommitmentParams;
-use crate::vector_commitment::bytes::JZVectorCommitmentParams;
-
+use crate::vector_commitment::bytes::{
+    JZVectorCommitment,
+    JZVectorCommitmentOpeningProof,
+    JZVectorCommitmentParams,
+    JZVectorCommitmentPath,
+    JZVectorCommitmentLeafDigest,
+    JZVectorCommitmentInnerDigest
+};
 
 type Curve = ark_bls12_377::Bls12_377;
 type F = ark_bls12_377::Fr;
 type G1Affine = <Curve as Pairing>::G1Affine;
 type ConstraintF = ark_bw6_761::Fr;
 type ConstraintPairing = ark_bw6_761::BW6_761;
+
+
+// pub struct Path<P: Config> {
+//     pub leaf_sibling_hash: P::LeafDigest,
+//     /// The sibling of path node ordered from higher layer to lower layer (does not include root node).
+//     pub auth_path: Vec<P::InnerDigest>,
+//     /// stores the leaf index of the node
+//     pub leaf_index: usize,
+// }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct JZVectorCommitmentOpeningProofBs58 {
+    pub path_leaf_sibling_hash: String,
+    pub path_auth_path: Vec<String>,
+    pub path_leaf_index: usize,
+    pub record: String,
+    pub root: String
+ }
+
+ pub fn jz_vector_commitment_opening_proof_to_bs58(
+    proof: &JZVectorCommitmentOpeningProof<G1Affine>
+ ) -> JZVectorCommitmentOpeningProofBs58 {
+    let mut buffer: Vec<u8> = Vec::new();
+    proof.path.leaf_sibling_hash.serialize_compressed(&mut buffer).unwrap();
+    let path_leaf_sibling_hash = bs58::encode(buffer).into_string();
+
+    let mut path_auth_path = Vec::new();
+    for inner_digest in proof.path.auth_path.iter() {
+        let mut buffer: Vec<u8> = Vec::new();
+        inner_digest.serialize_compressed(&mut buffer).unwrap();
+        let inner_digest_serialized = bs58::encode(buffer).into_string();
+
+        path_auth_path.push(inner_digest_serialized);
+    }
+
+    let mut buffer: Vec<u8> = Vec::new();
+    proof.record.serialize_compressed(&mut buffer).unwrap();
+    let record = bs58::encode(buffer).into_string();
+
+    let mut buffer: Vec<u8> = Vec::new();
+    proof.root.serialize_compressed(&mut buffer).unwrap();
+    let root = bs58::encode(buffer).into_string();
+
+    JZVectorCommitmentOpeningProofBs58 {
+        path_leaf_sibling_hash,
+        path_auth_path,
+        path_leaf_index: proof.path.leaf_index,
+        record,
+        root
+    }
+}
+
+pub fn jz_vector_commitment_opening_proof_from_bs58(
+    proof: &JZVectorCommitmentOpeningProofBs58
+) -> JZVectorCommitmentOpeningProof<G1Affine> {
+
+    let buf: Vec<u8> = bs58::decode(proof.path_leaf_sibling_hash.clone()).into_vec().unwrap();
+    let leaf_digest = JZVectorCommitmentLeafDigest::deserialize_compressed(buf.as_slice()).unwrap();
+
+    let mut nodes: Vec<JZVectorCommitmentInnerDigest> = vec![];
+    for node in proof.path_auth_path.iter() {
+        let buf: Vec<u8> = bs58::decode(node.clone()).into_vec().unwrap();
+        let node = JZVectorCommitmentInnerDigest::deserialize_compressed(buf.as_slice()).unwrap();
+
+        nodes.push(node);
+    }
+
+    let buf: Vec<u8> = bs58::decode(proof.record.clone()).into_vec().unwrap();
+    let record = G1Affine::deserialize_compressed(buf.as_slice()).unwrap();
+
+    let buf: Vec<u8> = bs58::decode(proof.root.clone()).into_vec().unwrap();
+    let root = JZVectorCommitment::deserialize_compressed(buf.as_slice()).unwrap();
+
+    JZVectorCommitmentOpeningProof {
+        path: JZVectorCommitmentPath {
+            leaf_sibling_hash: leaf_digest,
+            auth_path: nodes,
+            leaf_index: proof.path_leaf_index,
+        },
+        record,
+        root,
+    }
+}
 
 /// LotteryOrder is submitted by the client to the MPC subnet
 #[derive(Debug, Serialize, Deserialize, Clone)]
