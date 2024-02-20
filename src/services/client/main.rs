@@ -1,5 +1,5 @@
+use lib_mpc_zexe::protocol::JZVectorCommitmentOpeningProofBs58;
 use lib_mpc_zexe::vector_commitment::bytes::JZVectorCommitmentOpeningProof;
-use lib_mpc_zexe::vector_commitment::bytes::JZVectorDB;
 use reqwest::Client;
 use rand_chacha::rand_core::SeedableRng;
 use std::time::Instant;
@@ -7,13 +7,28 @@ use std::time::Instant;
 
 use ark_ff::{*};
 use ark_std::{*, rand::RngCore};
-use ark_ec::CurveGroup;
 
 use lib_mpc_zexe::coin::*;
 use lib_mpc_zexe::apps::lottery;
 use lib_mpc_zexe::apps::onramp;
 use lib_mpc_zexe::record_commitment::*;
 use lib_mpc_zexe::protocol as protocol;
+
+async fn get_merkle_proof(index: usize)
+-> reqwest::Result<JZVectorCommitmentOpeningProof<ark_bls12_377::G1Affine>> {
+    let client = Client::new();
+    let response = client.get("http://127.0.0.1:8082/getmerkleproof")
+        .json(&index)
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let merkle_proof_bs58: JZVectorCommitmentOpeningProofBs58 = 
+        serde_json::from_str(&response).unwrap();
+
+    Ok(protocol::jz_vector_commitment_opening_proof_from_bs58(&merkle_proof_bs58))
+}
 
 async fn onramp_order(item: protocol::OnRampTransaction) -> reqwest::Result<()> {
     let client = Client::new();
@@ -175,19 +190,18 @@ fn parse_args() {
 #[tokio::main]
 async fn main() -> reqwest::Result<()> {
     //parse_args();
-    let (_, vc_params, _) = protocol::trusted_setup();
 
     let (lottery_pk, _) = lottery::circuit_setup();
     let (onramp_pk, _) = onramp::circuit_setup();
 
     let coins = airdrop();
 
-    let records = coins
-        .iter()
-        .map(|coin| coin.commitment().into_affine())
-        .collect::<Vec<_>>();
+    // let records = coins
+    //     .iter()
+    //     .map(|coin| coin.commitment().into_affine())
+    //     .collect::<Vec<_>>();
     
-    let db = JZVectorDB::<ark_bls12_377::G1Affine>::new(&vc_params, &records);
+    // //let db = JZVectorDB::<ark_bls12_377::G1Affine>::new(&vc_params, &records);
 
     onramp_order(
         protocol::OnRampTransaction {
@@ -210,11 +224,12 @@ async fn main() -> reqwest::Result<()> {
 
     let now = Instant::now();
 
-    let alice_merkle_proof = JZVectorCommitmentOpeningProof {
-        root: db.commitment(),
-        record: db.get_record(0).clone(),
-        path: db.proof(0),
-    };
+    // let alice_merkle_proof = JZVectorCommitmentOpeningProof {
+    //     root: db.commitment(),
+    //     record: db.get_record(0).clone(),
+    //     path: db.proof(0),
+    // };
+    let alice_merkle_proof = get_merkle_proof(0).await?;
     let (alice_proof, alice_public_inputs) = lottery::generate_groth_proof(
         &lottery_pk,
         &coins[0],
@@ -227,11 +242,12 @@ async fn main() -> reqwest::Result<()> {
         now.elapsed().as_secs(), now.elapsed().subsec_millis()
     );
 
-    let bob_merkle_proof = JZVectorCommitmentOpeningProof {
-        root: db.commitment(),
-        record: db.get_record(1).clone(),
-        path: db.proof(1),
-    };
+    // let bob_merkle_proof = JZVectorCommitmentOpeningProof {
+    //     root: db.commitment(),
+    //     record: db.get_record(1).clone(),
+    //     path: db.proof(1),
+    // };
+    let bob_merkle_proof = get_merkle_proof(1).await?;
     let (bob_proof, bob_public_inputs) = lottery::generate_groth_proof(
         &lottery_pk,
         &coins[1],

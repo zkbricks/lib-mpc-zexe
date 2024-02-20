@@ -10,7 +10,10 @@ use std::time::Instant;
 
 use lib_mpc_zexe::coin::*;
 use lib_mpc_zexe::record_commitment::JZRecord;
-use lib_mpc_zexe::vector_commitment::bytes::JZVectorDB;
+use lib_mpc_zexe::vector_commitment::bytes::{
+    JZVectorDB,
+    JZVectorCommitmentOpeningProof,
+};
 use lib_mpc_zexe::collaborative_snark::plonk::*;
 use lib_mpc_zexe::apps;
 use lib_mpc_zexe::protocol as protocol;
@@ -22,6 +25,28 @@ pub struct AppStateType {
 
 struct GlobalAppState {
     state: Mutex<AppStateType>, // <- Mutex is necessary to mutate safely across threads
+}
+
+async fn get_merkle_proof(
+    global_state: web::Data<GlobalAppState>,
+    index: web::Json<usize>
+) -> String {
+    let state = global_state.state.lock().unwrap();
+    let index: usize = index.into_inner();
+
+    let merkle_proof = JZVectorCommitmentOpeningProof {
+        root: (*state).db.commitment(),
+        record: (*state).db.get_record(index).clone(),
+        path: (*state).db.proof(index),
+    };
+
+    drop(state);
+
+    let merkle_proof_bs58 = protocol::jz_vector_commitment_opening_proof_to_bs58(
+        &merkle_proof
+    );
+
+    serde_json::to_string(&merkle_proof_bs58).unwrap()
 }
 
 async fn on_ramp_tx(
@@ -163,6 +188,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.clone()) // <- register the created data
             .route("/lottery", web::post().to(verify_lottery_tx))
             .route("/onramp", web::post().to(on_ramp_tx))
+            .route("/getmerkleproof", web::get().to(get_merkle_proof))
     })
     .bind(("127.0.0.1", 8082))?
     .run()
