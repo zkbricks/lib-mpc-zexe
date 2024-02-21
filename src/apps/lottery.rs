@@ -498,6 +498,7 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
     let circuit = {
         let (prf_params, vc_params, crs) = protocol::trusted_setup();
     
+        // let's create the universe of dummy coins
         let mut coins = Vec::new();
         let mut records = Vec::new();
         for _ in 0..64u8 {
@@ -518,6 +519,8 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
             coins.push(coin);
         }
     
+        // let's create a database of coins, and generate a merkle proof
+        // we need this in order to create a circuit with appropriate public inputs
         let db = JZVectorDB::<ark_bls12_377::G1Affine>::new(&vc_params, &records);
         let merkle_proof = JZVectorCommitmentOpeningProof {
             root: db.commitment(),
@@ -525,7 +528,7 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
             path: db.proof(0),
         };
 
-    
+        // note that circuit setup does not care about the values of witness variables
         SpendCircuit {
             crs: crs,
             prf_params: prf_params,
@@ -598,6 +601,17 @@ pub fn generate_groth_proof(
             )
         )
     );
+
+    // arrange the public inputs according to the GrothPublicInput definition
+    // pub enum GrothPublicInput {
+    //     PLACEHOLDER_OUTPUT_COIN_COM_X = 0,
+    //     PLACEHOLDER_OUTPUT_COIN_COM_Y = 1,
+    //     BLINDED_INPUT_COIN_COM_X = 2,
+    //     BLINDED_INPUT_COIN_COM_Y = 3,
+    //     INPUT_ROOT_X = 4,
+    //     INPUT_ROOT_Y = 5,
+    //     NULLIFIER = 6,
+    // }
 
     let public_inputs = vec![
         placeholder_output_coin_com.x,
