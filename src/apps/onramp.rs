@@ -21,6 +21,7 @@ type ConstraintF = ark_bw6_761::Fr;
 // Finite Field used to encode the coin data structure
 type F = ark_bls12_377::Fr;
 
+// the public inputs in the Groth proof are ordered as follows
 #[allow(non_camel_case_types)]
 pub enum GrothPublicInput {
     ASSET_ID = 0,
@@ -62,6 +63,8 @@ impl ConstraintSynthesizer<ConstraintF> for OnRampCircuit {
 
         //----------------- public values for the coin ---------------------
 
+        // we need the asset_id and amount to be public inputs to the circuit
+        // so let's create variables for them
         let asset_id = ConstraintF::from(
             BigInt::<6>::from_bits_le(
                 utils::bytes_to_bits(
@@ -133,6 +136,7 @@ impl ConstraintSynthesizer<ConstraintF> for OnRampCircuit {
 
         //--------------- Binding all circuit gadgets together ------------------
 
+        // let's constrain the amount bits to be equal to the amount_var
         let min_len = min(
             unspent_coin_var.fields[AMOUNT].len(),
             amount_var.to_bytes()?.len(),
@@ -141,6 +145,7 @@ impl ConstraintSynthesizer<ConstraintF> for OnRampCircuit {
             unspent_coin_var.fields[AMOUNT][i].enforce_equal(&amount_var.to_bytes()?[i])?;
         }
 
+        // let's constrain the asset_id bits to be equal to the asset_id_var
         let min_len = min(
             unspent_coin_var.fields[ASSET_ID].len(),
             asset_id_var.to_bytes()?.len(),
@@ -159,6 +164,7 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
     let circuit = {
         let (_, _, crs) = protocol::trusted_setup();
         
+        // our dummy witness is a coin with all fields set to zero
         let fields: [Vec<u8>; 8] = 
         [
             vec![0u8; 31], //entropy
@@ -171,8 +177,8 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
             vec![0u8; 31],
         ];
 
+        // let's create our dummy coin out of the above zeroed fields
         let coin = JZRecord::<8>::new(&crs, &fields, &[0u8; 31].into());
-
     
         OnRampCircuit {
             crs: crs,
@@ -207,6 +213,7 @@ pub fn generate_groth_proof(
         .commitment()
         .into_affine();
 
+    // construct a BW6_761 field element from the asset_id bits
     let asset_id = ConstraintF::from(
         BigInt::<6>::from_bits_le(
             utils::bytes_to_bits(
@@ -215,6 +222,7 @@ pub fn generate_groth_proof(
         )
     );
 
+    // construct a BW6_761 field element from the amount bits
     let amount = ConstraintF::from(
         BigInt::<6>::from_bits_le(
             utils::bytes_to_bits(
@@ -223,6 +231,13 @@ pub fn generate_groth_proof(
         )
     );
 
+    // arrange the public inputs based on the GrothPublicInput enum definition
+    // pub enum GrothPublicInput {
+    //     ASSET_ID = 0,
+    //     AMOUNT = 1,
+    //     COIN_COM_X = 2,
+    //     COIN_COM_Y = 3,
+    // }
     let public_inputs: Vec<ConstraintF> = vec![
         asset_id,
         amount,
