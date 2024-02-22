@@ -65,6 +65,7 @@ async fn submit_lottery_tx(
         amount_correction: vec![tx.amount_correction.clone()],
     };
 
+    println!("submitting lottery transaction to the L1 contract...");
     let client = Client::new();
     let response = client.post("http://127.0.0.1:8082/lottery")
         .json(&lottery_proof)
@@ -73,7 +74,7 @@ async fn submit_lottery_tx(
         .unwrap();
     
     if response.status().is_success() {
-        println!("Lottery executed successfully");
+        println!("lottery executed successfully!");
         "success".to_string()
     } else {
         "failure".to_string()

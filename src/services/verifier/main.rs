@@ -78,6 +78,7 @@ async fn on_ramp_tx(
     let index = (*state).num_coins;
     (*state).db.update(index, &com);
     (*state).num_coins += 1;
+    println!("added coin to state at index {}", index);
 
     drop(state);
     "success".to_string()
