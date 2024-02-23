@@ -80,7 +80,7 @@ pub enum GrothPublicInput {
     /// x-coordinate of the placeholder refund coin's commitment
     PLACEHOLDER_REFUND_COIN_COM_X = 2,
     /// y-coordinate of the placeholder refund coin's commitment
-	PLACEHOLDER_OUTPUT_COIN_COM_Y = 3,
+	PLACEHOLDER_REFUND_COIN_COM_Y = 3,
     /// x-coordinate of the input coin's blinded commitment
     /// (the input coin is derived from the unspent coin by setting app id to SWAP)
 	BLINDED_INPUT_COIN_COM_X = 4,
@@ -103,7 +103,12 @@ pub fn collaborative_prover<const N: usize>(
     input_coins_poly: &[DensePolynomial<F>],
     output_coins_poly: &[DensePolynomial<F>],
 ) -> (Vec<DensePolynomial<F>>, Vec<DensePolynomial<F>>) {
-    // Each constraint in our app will be encoded as a polynomial equation
+    // Each constraint below will be encoded as a polynomial equation
+    // 1. input[0].amount = output[1].amount + output[2].amount
+    // 2. input[1].amount = output[0].amount + output[3].amount
+    // 3. input[0].asset_id = output[1].asset_id = output[2].asset_id
+    // 4. input[1].asset_id = output[0].asset_id = output[3].asset_id
+    // 5. input[0].app_id = input[1].app_id = SWAP
 
     // coin data structure is encoded over the lagrange basis, 
     // so let's compute the lagrange polynomials first
@@ -114,50 +119,78 @@ pub fn collaborative_prover<const N: usize>(
     // 1) input[0].amount = output[1].amount + output[2].amount
     let lhs_poly_1 = lagrange_polynomials[AMOUNT].clone()
         .mul(
-            &(input_coins_poly[0].clone()
-            .add(input_coins_poly[1].clone())
-            .sub(&output_coins_poly[0]))
+            &(output_coins_poly[1].clone()
+            .add(output_coins_poly[2].clone())
+            .sub(&input_coins_poly[0]))
         );
 
-    // 2) input and output coins have the same asset id, implied by 2a and 2b below
+    // 2) input[1].amount = output[0].amount + output[3].amount
+    let lhs_poly_2 = lagrange_polynomials[AMOUNT].clone()
+        .mul(
+            &(output_coins_poly[0].clone()
+            .add(output_coins_poly[3].clone())
+            .sub(&input_coins_poly[1]))
+        );
 
-    // 2a) same asset id: input[0].asset_id = output[0].asset_id
-    let lhs_poly_2a = lagrange_polynomials[ASSET_ID].clone()
+    // 3. input[0].asset_id = output[1].asset_id = output[2].asset_id
+    let lhs_poly_3a = lagrange_polynomials[ASSET_ID].clone()
         .mul(
             &(input_coins_poly[0].clone()
-            .sub(&output_coins_poly[0]))
+            .sub(&output_coins_poly[1]))
+        );
+    let lhs_poly_3b = lagrange_polynomials[ASSET_ID].clone()
+        .mul(
+            &(input_coins_poly[0].clone()
+            .sub(&output_coins_poly[2]))
         );
 
-    // 2b) same asset id: input[1].asset_id = output[0].asset_id
-    let lhs_poly_2b = lagrange_polynomials[ASSET_ID].clone()
+    // 4. input[1].asset_id = output[0].asset_id = output[3].asset_id
+    let lhs_poly_4a = lagrange_polynomials[ASSET_ID].clone()
         .mul(
             &(input_coins_poly[1].clone()
             .sub(&output_coins_poly[0]))
         );
-
-    // 3) check that the app id is LOTTERY on input[0] and input[1]
-    let (lhs_poly_3a, lhs_poly_3b) = {
-        let app_id_lottery_poly = utils::poly_eval_mult_const(
-            &lagrange_polynomials[APP_ID].clone(),
-            &F::from(AppId::LOTTERY as u64)
+    let lhs_poly_4b = lagrange_polynomials[ASSET_ID].clone()
+        .mul(
+            &(input_coins_poly[1].clone()
+            .sub(&output_coins_poly[3]))
         );
 
-        let lhs_poly_3a = lagrange_polynomials[APP_ID].clone()
+    // 5. input[0].app_id = input[1].app_id = SWAP
+    let (lhs_poly_5a, lhs_poly_5b) = {
+        let app_id_swap_poly = utils::poly_eval_mult_const(
+            &lagrange_polynomials[APP_ID].clone(),
+            &F::from(AppId::SWAP as u64)
+        );
+
+        let lhs_poly_5a = lagrange_polynomials[APP_ID].clone()
             .mul(
                 &input_coins_poly[0].clone()
-                .sub(&app_id_lottery_poly)
+                .sub(&app_id_swap_poly)
             );
 
-        let lhs_poly_3b = lagrange_polynomials[APP_ID].clone()
+        let lhs_poly_5b = lagrange_polynomials[APP_ID].clone()
             .mul(
                 &input_coins_poly[1].clone()
-                .sub(&app_id_lottery_poly)
+                .sub(&app_id_swap_poly)
             );
 
-        (lhs_poly_3a, lhs_poly_3b)
+        (lhs_poly_5a, lhs_poly_5b)
     };
 
-    (vec![lhs_poly_1, lhs_poly_2a, lhs_poly_2b, lhs_poly_3a, lhs_poly_3b], vec![])
+    (
+        vec![
+            lhs_poly_1,
+            lhs_poly_2,
+            lhs_poly_3a,
+            lhs_poly_3b,
+            lhs_poly_4a,
+            lhs_poly_4b,
+            lhs_poly_5a,
+            lhs_poly_5b
+        ],
+        vec![]
+    )
 }
 
 /// collaborative_verifier contains the application-specific functionality for
@@ -170,43 +203,65 @@ pub fn collaborative_verifier<const N: usize>(
         .map(|i| utils::lagrange_poly(N, i))
         .collect::<Vec<DensePolynomial<F>>>();
 
-    let app_id_lottery_poly = utils::poly_eval_mult_const(
-        &lagrange_polynomials[APP_ID].clone(),
-        &F::from(AppId::LOTTERY as u64)
-    );
-
-    // polynomial identity with Schwartz-Zippel
+    // input[0].amount = output[1].amount + output[2].amount
     let lhs_1 = lagrange_polynomials[AMOUNT].evaluate(&r) * 
         (
-            proof.input_coins_opening[0] +
-            proof.input_coins_opening[1] -
-            proof.output_coins_opening[0]
+            proof.output_coins_opening[1] +
+            proof.output_coins_opening[2] -
+            proof.input_coins_opening[0]
         );
 
-    let lhs_2a = lagrange_polynomials[ASSET_ID].evaluate(&r) * 
+    // 2) input[1].amount = output[0].amount + output[3].amount
+    let lhs_2 = lagrange_polynomials[AMOUNT].evaluate(&r) * 
+        (
+            proof.output_coins_opening[0] +
+            proof.output_coins_opening[3] -
+            proof.input_coins_opening[1]
+        );
+
+    // 3. input[0].asset_id = output[1].asset_id = output[2].asset_id
+    let lhs_3a = lagrange_polynomials[ASSET_ID].evaluate(&r) * 
         (
             proof.input_coins_opening[0] -
-            proof.output_coins_opening[0]
+            proof.output_coins_opening[1]
         );
 
-    let lhs_2b = lagrange_polynomials[ASSET_ID].evaluate(&r) * (
+    let lhs_3b = lagrange_polynomials[ASSET_ID].evaluate(&r) * (
+        proof.input_coins_opening[0] -
+        proof.output_coins_opening[2]
+    );
+
+    // 4. input[1].asset_id = output[0].asset_id = output[3].asset_id
+    let lhs_4a = lagrange_polynomials[ASSET_ID].evaluate(&r) * 
+    (
         proof.input_coins_opening[1] -
         proof.output_coins_opening[0]
     );
 
-    let lhs_3a = lagrange_polynomials[APP_ID].evaluate(&r) *
-        (   
-            proof.input_coins_opening[0] -
-            app_id_lottery_poly.evaluate(&r)
-        );
-
-    let lhs_3b = lagrange_polynomials[APP_ID].evaluate(&r) *
-    (   
+    let lhs_4b = lagrange_polynomials[ASSET_ID].evaluate(&r) * (
         proof.input_coins_opening[1] -
-        app_id_lottery_poly.evaluate(&r)
+        proof.output_coins_opening[3]
     );
 
-    vec![lhs_1, lhs_2a, lhs_2b, lhs_3a, lhs_3b]
+    // 5. input[0].app_id = input[1].app_id = SWAP
+    let app_id_swap_poly = utils::poly_eval_mult_const(
+        &lagrange_polynomials[APP_ID].clone(),
+        &F::from(AppId::SWAP as u64)
+    );
+
+    let lhs_5a = lagrange_polynomials[APP_ID].evaluate(&r) *
+        (   
+            proof.input_coins_opening[0] -
+            app_id_swap_poly.evaluate(&r)
+        );
+
+    let lhs_5b = lagrange_polynomials[APP_ID].evaluate(&r) *
+    (   
+        proof.input_coins_opening[1] -
+        app_id_swap_poly.evaluate(&r)
+    );
+
+    vec![lhs_1, lhs_2, lhs_3a, lhs_3b, lhs_4a, lhs_4b, lhs_5a, lhs_5b]
 }
 
 /// SpendCircuit contains all the components that will be used to 
@@ -237,8 +292,11 @@ pub struct SpendCircuit {
     /// all fields of the live input coin derived from the above spent coin
     pub input_coin_record: JZRecord<8>,
 
-    /// all fields of the placeholder output coin are also a secret witness
+    /// all fields of the placeholder coin denoting the swap's output
     pub placeholder_output_coin_record: JZRecord<8>,
+
+    /// all fields of the placeholder coin denoting the swap's refund
+    pub placeholder_refund_coin_record: JZRecord<8>,
 
     /// Merkle opening proof for proving existence of the unspent coin
     pub unspent_coin_existence_proof: JZVectorCommitmentOpeningProof<ark_bls12_377::G1Affine>,
@@ -275,36 +333,36 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
             &self.vc_params
         ).unwrap();
 
-        //--------------- KZG proof for placeholder coin ------------------
+        //--------------- KZG proof for placeholder output coin ------------------
         // Here, we prove that we know the opening for the commitment denoting
         // the placeholder output coin. Note that the placeholder coin's commitment
         // is part of the statement, so it is one of the public inputs to the proof.
         // By including this proof, the verifier is convinced that the party is able
         // to later spend the output coin, as they know the opening.
 
-        let placeholder_coin_record = self.placeholder_output_coin_record.borrow();
+        let placeholder_output_coin_record = self.placeholder_output_coin_record.borrow();
 
         // the entire placeholder output record becomes a secret witness
-        let placeholder_coin_var = JZRecordVar::<8>::new_witness(
+        let placeholder_output_coin_var = JZRecordVar::<8>::new_witness(
             cs.clone(),
-            || Ok(placeholder_coin_record)
+            || Ok(placeholder_output_coin_record)
         ).unwrap();
 
         // we will use its natively computed commitment to set as the public input
-        let placeholder_coin_com = placeholder_coin_record
+        let placeholder_output_coin_com = placeholder_output_coin_record
             .commitment()
             .into_affine();
 
         // we make the commitment to the placeholder coin be part of the statement
         // to that end, we separately enforce equality of the x and y coordinates
-        let stmt_placeholder_com_x = ark_bls12_377::constraints::FqVar::new_input(
-            ark_relations::ns!(cs, "placeholder_com_x"),
-            || { Ok(placeholder_coin_com.x) },
+        let stmt_placeholder_output_com_x = ark_bls12_377::constraints::FqVar::new_input(
+            ark_relations::ns!(cs, "placeholder_output_com_x"),
+            || { Ok(placeholder_output_coin_com.x) },
         ).unwrap();
 
-        let stmt_placeholder_com_y = ark_bls12_377::constraints::FqVar::new_input(
-            ark_relations::ns!(cs, "placeholder_com_y"),
-            || { Ok(placeholder_coin_com.y) },
+        let stmt_placeholder_output_com_y = ark_bls12_377::constraints::FqVar::new_input(
+            ark_relations::ns!(cs, "placeholder_output_com_y"),
+            || { Ok(placeholder_output_coin_com.y) },
         ).unwrap();
 
         // trigger the constraint generation, which includes the KZG computation;
@@ -313,19 +371,65 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
         record_commitment::constraints::generate_constraints(
             cs.clone(),
             &crs_var,
-            &placeholder_coin_var
+            &placeholder_output_coin_var
         ).unwrap();
 
         // compute the affine var from the projective var
-        let placeholder_coin_var_com = placeholder_coin_var
+        let placeholder_output_coin_var_com = placeholder_output_coin_var
             .commitment
             .to_affine()
             .unwrap();
 
         // does the computed com match the input com?
-        placeholder_coin_var_com.x.enforce_equal(&stmt_placeholder_com_x)?;
-        placeholder_coin_var_com.y.enforce_equal(&stmt_placeholder_com_y)?;
+        placeholder_output_coin_var_com.x.enforce_equal(&stmt_placeholder_output_com_x)?;
+        placeholder_output_coin_var_com.y.enforce_equal(&stmt_placeholder_output_com_y)?;
 
+
+        //--------------- KZG proof for placeholder refund coin ------------------
+
+        let placeholder_refund_coin_record = self.placeholder_refund_coin_record.borrow();
+
+        // the entire placeholder output record becomes a secret witness
+        let placeholder_refund_coin_var = JZRecordVar::<8>::new_witness(
+            cs.clone(),
+            || Ok(placeholder_refund_coin_record)
+        ).unwrap();
+
+        // we will use its natively computed commitment to set as the public input
+        let placeholder_refund_coin_com = placeholder_refund_coin_record
+            .commitment()
+            .into_affine();
+
+        // we make the commitment to the placeholder coin be part of the statement
+        // to that end, we separately enforce equality of the x and y coordinates
+        let stmt_placeholder_refund_com_x = ark_bls12_377::constraints::FqVar::new_input(
+            ark_relations::ns!(cs, "placeholder_refund_com_x"),
+            || { Ok(placeholder_refund_coin_com.x) },
+        ).unwrap();
+
+        let stmt_placeholder_refund_com_y = ark_bls12_377::constraints::FqVar::new_input(
+            ark_relations::ns!(cs, "placeholder_refund_com_y"),
+            || { Ok(placeholder_refund_coin_com.y) },
+        ).unwrap();
+
+        // trigger the constraint generation, which includes the KZG computation;
+        // the coin_var includes the variable for the "computed" commitment, so 
+        // we will enforce equality of that with the input variable above
+        record_commitment::constraints::generate_constraints(
+            cs.clone(),
+            &crs_var,
+            &placeholder_refund_coin_var
+        ).unwrap();
+
+        // compute the affine var from the projective var
+        let placeholder_refund_coin_var_com = placeholder_refund_coin_var
+            .commitment
+            .to_affine()
+            .unwrap();
+
+        // does the computed com match the input com?
+        placeholder_refund_coin_var_com.x.enforce_equal(&stmt_placeholder_refund_com_x)?;
+        placeholder_refund_coin_var_com.y.enforce_equal(&stmt_placeholder_refund_com_y)?;
 
         //--------------- KZG commitment for input coin ------------------
         // we will now do the same thing for the app-input coin, except
@@ -509,7 +613,7 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
 
         //--------------- Binding all circuit gadgets together ------------------
 
-        // 1. constrain the sk variable in both PRFs
+        // 1. constrain the sk variable in both PRFs to be equal
         for (i, byte_var) in ownership_prf_instance_var.key_var.iter().enumerate() {
             byte_var.enforce_equal(&nullifier_prf_instance_var.key_var[i])?;
         }
@@ -519,7 +623,7 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
             byte_var.enforce_equal(&unspent_coin_var.fields[RHO][i])?;
         }
 
-        // 1. constrain the unspent coin to have the same value and owner as the input coin
+        // 3. constrain the unspent coin to have the same value and owner as the input coin
         let matching_fields = vec![OWNER, AMOUNT, ASSET_ID, ENTROPY, RHO]; //let's do others too
         for field in matching_fields {
             for (i, byte_var) in unspent_coin_var.fields[field].iter().enumerate() {
@@ -527,7 +631,7 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
             }
         }
 
-        // 2. let us first constrain the merkle leaf node to equal the unspent coin's commitment
+        // 4. let us first constrain the merkle leaf node to equal the unspent coin's commitment
         let unspent_coin_com_byte_vars: Vec::<UInt8<ConstraintF>> = unspent_coin_var
             .commitment // grab the commitment variable
             .to_affine().unwrap() // we always build constraints over the affine repr
@@ -540,7 +644,7 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
             byte_var.enforce_equal(&proof_var.leaf_var[i])?;
         }
 
-        // 3. prove ownership of the coin. Does sk correspond to coin's pk?
+        // 5. prove ownership of the coin. Does sk correspond to coin's pk?
         for (i, byte_var) in unspent_coin_var.fields[OWNER].iter().enumerate() {
             byte_var.enforce_equal(&ownership_prf_instance_var.output_var[i])?;
         }
@@ -594,6 +698,7 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
             unspent_coin_record: coins[0].clone(), // doesn't matter what value the coin has
             input_coin_record: coins[0].clone(), // again, doesn't matter what value
             placeholder_output_coin_record: coins[0].clone(), // doesn't matter what value
+            placeholder_refund_coin_record: coins[0].clone(), // doesn't matter what value
             unspent_coin_existence_proof: merkle_proof,
         }
     };
@@ -612,7 +717,8 @@ pub fn generate_groth_proof(
     pk: &ProvingKey<BW6_761>,
     unspent_coin: &JZRecord<8>,
     app_input_coin: &JZRecord<8>,
-    placeholder_coin: &JZRecord<8>,
+    placeholder_output_coin: &JZRecord<8>,
+    placeholder_refund_coin: &JZRecord<8>,
     unspent_coin_existence_proof: &JZVectorCommitmentOpeningProof<ark_bls12_377::G1Affine>,
     sk: &[u8; 32]
 ) -> (Proof<BW6_761>, Vec<ConstraintF>) {
@@ -632,7 +738,8 @@ pub fn generate_groth_proof(
         sk: sk.clone(),
         unspent_coin_record: unspent_coin.clone(),
         input_coin_record: app_input_coin.clone(),
-        placeholder_output_coin_record: placeholder_coin.clone(),
+        placeholder_output_coin_record: placeholder_output_coin.clone(),
+        placeholder_refund_coin_record: placeholder_refund_coin.clone(),
         unspent_coin_existence_proof: unspent_coin_existence_proof.clone(),
     };
 
@@ -646,6 +753,11 @@ pub fn generate_groth_proof(
     let placeholder_output_coin_com = circuit.placeholder_output_coin_record
         .commitment()
         .into_affine();
+
+    // native computation of the placeholder refund coin's commitment
+    let placeholder_refund_coin_com = circuit.placeholder_refund_coin_record
+    .commitment()
+    .into_affine();
 
     // we already computed the merkle root above
     let input_root = circuit.unspent_coin_existence_proof.root;
@@ -663,16 +775,20 @@ pub fn generate_groth_proof(
     // pub enum GrothPublicInput {
     //     PLACEHOLDER_OUTPUT_COIN_COM_X = 0,
     //     PLACEHOLDER_OUTPUT_COIN_COM_Y = 1,
-    //     BLINDED_INPUT_COIN_COM_X = 2,
-    //     BLINDED_INPUT_COIN_COM_Y = 3,
-    //     INPUT_ROOT_X = 4,
-    //     INPUT_ROOT_Y = 5,
-    //     NULLIFIER = 6,
+    //     PLACEHOLDER_REFUND_COIN_COM_X = 2,
+    //     PLACEHOLDER_REFUND_COIN_COM_Y = 3,
+    //     BLINDED_INPUT_COIN_COM_X = 4,
+    //     BLINDED_INPUT_COIN_COM_Y = 5,
+    //     INPUT_ROOT_X = 6,
+    //     INPUT_ROOT_Y = 7,
+    //     NULLIFIER = 8,
     // }
 
     let public_inputs = vec![
         placeholder_output_coin_com.x,
         placeholder_output_coin_com.y,
+        placeholder_refund_coin_com.x,
+        placeholder_refund_coin_com.y,
         blinded_input_coin_com.x,
         blinded_input_coin_com.y,
         input_root.x,
