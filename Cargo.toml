@@ -8,20 +8,20 @@ name = "lib_mpc_zexe"
 path = "src/lib.rs"
 
 [[bin]]
-name = "matchmaker"
-path = "src/services/matchmaker/main.rs"
+name = "lottery_matchmaker"
+path = "src/services/lottery/matchmaker/main.rs"
 
 [[bin]]
-name = "prover"
-path = "src/services/prover/main.rs"
+name = "lottery_prover"
+path = "src/services/lottery/prover/main.rs"
 
 [[bin]]
-name = "verifier"
-path = "src/services/verifier/main.rs"
+name = "lottery_verifier"
+path = "src/services/lottery/verifier/main.rs"
 
 [[bin]]
-name = "client"
-path = "src/services/client/main.rs"
+name = "lottery_client"
+path = "src/services/lottery/client/main.rs"
 
 [profile.test]
 opt-level = 3
