@@ -128,6 +128,27 @@ pub struct LotteryMatch {
     pub amount_correction: FieldElementBs58,
 }
 
+/// LotteryOrder is submitted by the client to the MPC subnet
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SwapOrder {
+    pub input_coin: CoinBs58,
+    pub input_coin_local_proof: GrothProofBs58,
+    pub placeholder_output_coin: CoinBs58,
+    pub placeholder_refund_coin: CoinBs58,
+}
+
+/// LotteryMatch is the message sent by the matchmaker to the SNARK prover
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwapMatch {
+    /// orders entering the swap
+    pub input_order_a: SwapOrder,
+    pub input_order_b: SwapOrder,
+    /// the correction to the placeholder refund coin
+    pub amount_correction_a: FieldElementBs58,
+    pub amount_correction_b: FieldElementBs58,
+}
+
+
 /// AppTransaction is submitted by the MPC subnet to the L1 contract
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppTransaction {

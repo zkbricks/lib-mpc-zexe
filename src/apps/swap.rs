@@ -608,10 +608,13 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
             &ownership_prf_instance_var
         );
 
-        // NOTE: We defer the proof (below) that the PRF output equals the public key of
-        // the unspent coin. For now, we are just instantiating the PRF gadgetry.
-
         //--------------- Binding all circuit gadgets together ------------------
+
+        // TODO: range check that the amounts are non-negative!!!
+
+        // 0. constrain the app_input_1 amount in input coin to equal placeholder_output
+        input_coin_var.fields[AMOUNT]
+            .enforce_equal(&placeholder_output_coin_var.fields[AMOUNT])?;
 
         // 1. constrain the sk variable in both PRFs to be equal
         for (i, byte_var) in ownership_prf_instance_var.key_var.iter().enumerate() {

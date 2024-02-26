@@ -23,6 +23,23 @@ path = "src/services/lottery/verifier/main.rs"
 name = "lottery_client"
 path = "src/services/lottery/client/main.rs"
 
+[[bin]]
+name = "swap_matchmaker"
+path = "src/services/swap/matchmaker/main.rs"
+
+[[bin]]
+name = "swap_prover"
+path = "src/services/swap/prover/main.rs"
+
+[[bin]]
+name = "swap_verifier"
+path = "src/services/swap/verifier/main.rs"
+
+[[bin]]
+name = "swap_client"
+path = "src/services/swap/client/main.rs"
+
+
 [profile.test]
 opt-level = 3
 
