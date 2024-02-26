@@ -613,7 +613,7 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
         // TODO: range check that the amounts are non-negative!!!
 
         // 0. constrain the app_input_1 amount in input coin to equal placeholder_output
-        input_coin_var.fields[AMOUNT]
+        input_coin_var.fields[APP_INPUT_1]
             .enforce_equal(&placeholder_output_coin_var.fields[AMOUNT])?;
 
         // 1. constrain the sk variable in both PRFs to be equal
@@ -759,8 +759,8 @@ pub fn generate_groth_proof(
 
     // native computation of the placeholder refund coin's commitment
     let placeholder_refund_coin_com = circuit.placeholder_refund_coin_record
-    .commitment()
-    .into_affine();
+        .commitment()
+        .into_affine();
 
     // we already computed the merkle root above
     let input_root = circuit.unspent_coin_existence_proof.root;

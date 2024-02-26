@@ -163,9 +163,13 @@ fn create_match_for_prover(
     // parse all 6 coins
     let a_input = protocol::coin_from_bs58(&order_a.input_coin);
     let b_input = protocol::coin_from_bs58(&order_b.input_coin);
+    let a_placeholder_refund = protocol::coin_from_bs58(&order_a.placeholder_refund_coin);
+    let b_placeholder_refund = protocol::coin_from_bs58(&order_b.placeholder_refund_coin);
     
-    let a_placeholder_refund_corr = a_input[AMOUNT] - b_input[APP_INPUT_1];
-    let b_placeholder_refund_corr = b_input[AMOUNT] - a_input[APP_INPUT_1];
+    let a_placeholder_refund_corr = 
+        (a_input[AMOUNT] - b_input[APP_INPUT_1]) - a_placeholder_refund[AMOUNT];
+    let b_placeholder_refund_corr = 
+        (b_input[AMOUNT] - a_input[APP_INPUT_1]) - b_placeholder_refund[AMOUNT];
 
     // prepare the swap transaction for the prover
     protocol::SwapMatch {
@@ -181,13 +185,14 @@ fn is_match(order_a: &Coin<F>, order_b: &Coin<F>) -> bool {
 
     // a's desired asset is b's asset type
     let c1 = order_a[APP_INPUT_0] == order_b[ASSET_ID];
+
     // b's desired asset is a's asset type
     let c2 = order_b[APP_INPUT_0] == order_a[ASSET_ID];
 
     // min_b_for_a >= b
-    let c3 = order_a[APP_INPUT_1] >= order_b[AMOUNT];
+    let c3 = order_a[APP_INPUT_1] <= order_b[AMOUNT];
     // min_a_for_b >= a
-    let c4 = order_b[APP_INPUT_1] >= order_a[AMOUNT];
+    let c4 = order_b[APP_INPUT_1] <= order_a[AMOUNT];
 
     c1 && c2 && c3 && c4
 }
