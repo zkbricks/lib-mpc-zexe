@@ -147,8 +147,8 @@ async fn verify_swap_tx(
 
             // verify that (commitments of) app-input coins match in collaborative and local proofs
             let input_com = ark_bls12_377::G1Affine::new(
-                public_inputs[apps::lottery::GrothPublicInput::BLINDED_INPUT_COIN_COM_X as usize],
-                public_inputs[apps::lottery::GrothPublicInput::BLINDED_INPUT_COIN_COM_Y as usize]
+                public_inputs[apps::swap::GrothPublicInput::BLINDED_INPUT_COIN_COM_X as usize],
+                public_inputs[apps::swap::GrothPublicInput::BLINDED_INPUT_COIN_COM_Y as usize]
             );
             assert_eq!(input_com.x(), plonk_proof.input_coins_com[output_coin_index].x());
             assert_eq!(input_com.y(), plonk_proof.input_coins_com[output_coin_index].y());

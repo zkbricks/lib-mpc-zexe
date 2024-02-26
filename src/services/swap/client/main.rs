@@ -216,6 +216,13 @@ fn bob_key() -> ([u8; 32], [u8; 31]) {
     (privkey, pubkey)
 }
 
+// Anonymous function to generate an array
+fn create_array(input: u8) -> [u8; 31] {
+    let mut arr = [0; 31];
+    arr[0] = input;
+    arr
+}
+
 fn alice_on_ramp_coin() -> JZRecord<8> {
     let (_, _, crs) = protocol::trusted_setup();
 
@@ -223,8 +230,8 @@ fn alice_on_ramp_coin() -> JZRecord<8> {
     [
         vec![0u8; 31],
         alice_key().1.to_vec(), //owner
-        vec![1 as u8], //asset id
-        vec![10u8 as u8], //amount
+        create_array(1u8).to_vec(), //asset id
+        create_array(10u8).to_vec(), //amount
         vec![AppId::OWNED as u8], //app id
         vec![0u8; 31],
         vec![0u8; 31],
@@ -241,11 +248,11 @@ fn alice_app_coin() -> JZRecord<8> {
     [
         vec![0u8; 31],
         alice_key().1.to_vec(), //owner
-        vec![1 as u8], //asset id
-        vec![10u8 as u8], //amount
+        create_array(1u8).to_vec(), //asset id
+        create_array(10u8).to_vec(), //amount
         vec![AppId::SWAP as u8], //app id
-        vec![2 as u8], //desured asset
-        vec![45 as u8], //desired amount
+        create_array(2u8).to_vec(), //desured asset
+        create_array(45u8).to_vec(), //desired amount
         vec![0u8; 31],
     ];
 
@@ -259,8 +266,8 @@ fn alice_placeholder_output_coin() -> JZRecord<8> {
     [
         vec![0u8; 31],
         alice_key().1.to_vec(), //owner
-        vec![2 as u8], //asset id
-        vec![45 as u8], //amount
+        create_array(2u8).to_vec(), //asset id
+        create_array(45u8).to_vec(), //amount
         vec![AppId::OWNED as u8], //app id
         vec![0u8; 31],
         vec![0u8; 31],
@@ -283,7 +290,7 @@ fn alice_placeholder_refund_coin() -> JZRecord<8> {
     [
         vec![0u8; 31],
         alice_key().1.to_vec(), //owner
-        vec![1 as u8], //asset id
+        create_array(1u8).to_vec(), //asset id
         amount.to_vec(), //amount
         vec![AppId::OWNED as u8], //app id
         vec![0u8; 31],
@@ -301,8 +308,8 @@ fn bob_on_ramp_coin() -> JZRecord<8> {
     [
         vec![0u8; 31],
         bob_key().1.to_vec(), //owner
-        vec![2 as u8], //asset id
-        vec![50u8 as u8], //amount
+        create_array(2u8).to_vec(), //asset id
+        create_array(50u8).to_vec(), //amount
         vec![AppId::OWNED as u8], //app id
         vec![0u8; 31],
         vec![0u8; 31],
@@ -319,11 +326,11 @@ fn bob_app_coin() -> JZRecord<8> {
     [
         vec![0u8; 31],
         bob_key().1.to_vec(), //owner
-        vec![2 as u8], //asset id
-        vec![50u8 as u8], //amount
+        create_array(2u8).to_vec(), //asset id
+        create_array(50u8).to_vec(), //amount
         vec![AppId::SWAP as u8], //app id
-        vec![1 as u8], //desired asset id
-        vec![9 as u8], //deired amount
+        create_array(1u8).to_vec(), //desired asset id
+        create_array(9u8).to_vec(), //deired amount
         vec![0u8; 31],
     ];
 
@@ -337,8 +344,8 @@ fn bob_placeholder_output_coin() -> JZRecord<8> {
     [
         vec![0u8; 31],
         bob_key().1.to_vec(), //owner
-        vec![1 as u8], //asset id
-        vec![9 as u8], //amount
+        create_array(1u8).to_vec(), //asset id
+        create_array(9u8).to_vec(), //amount
         vec![AppId::OWNED as u8], //app id
         vec![0u8; 31],
         vec![0u8; 31],
@@ -361,7 +368,7 @@ fn bob_placeholder_refund_coin() -> JZRecord<8> {
     [
         vec![0u8; 31],
         alice_key().1.to_vec(), //owner
-        vec![2 as u8], //asset id
+        create_array(2u8).to_vec(), //asset id
         amount.to_vec(), //amount
         vec![AppId::OWNED as u8], //app id
         vec![0u8; 31],
