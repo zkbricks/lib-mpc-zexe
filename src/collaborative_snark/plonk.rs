@@ -1,62 +1,16 @@
-use ark_ec::{*, pairing::*};
 use ark_std::*;
-use ark_std::borrow::*;
 use ark_ff::Field;
 use std::ops::*;
 use ark_poly::{
     Polynomial,
-    univariate::DensePolynomial, 
-    EvaluationDomain, 
-    Radix2EvaluationDomain,
-    Evaluations
+    univariate::DensePolynomial,
 };
-use ark_serialize::CanonicalSerialize;
-use ark_bls12_377::Bls12_377;
 
 use crate::utils;
 use crate::record_commitment::*;
 use crate::coin::*;
-use super::kzg;
-
-type Curve = ark_bls12_377::Bls12_377;
-type KZG = kzg::KZG10::<Curve, DensePolynomial<<Curve as Pairing>::ScalarField>>;
-type F = ark_bls12_377::Fr;
-type G1Affine = <Curve as Pairing>::G1Affine;
-type G2Affine = <Curve as Pairing>::G2Affine;
-
-type ProverFnT = fn(
-    &[DensePolynomial<F>],
-    &[DensePolynomial<F>]
-) -> (Vec<DensePolynomial<F>>, Vec<DensePolynomial<F>>);
-
-type VerifierFnT = fn(
-    &F, &PlonkProof
-) -> Vec<F>;
-
-pub struct PlonkProof {
-    // commitments to input coins data structures
-    pub input_coins_com: Vec<G1Affine>,
-    // commitments to output coins data structures
-    pub output_coins_com: Vec<G1Affine>,
-    // commitment to quotient polynomial
-    pub quotient_com: G1Affine,
-    // commitments to additional polynomials
-    pub additional_com: Vec<G1Affine>,
-
-    // openings of input coin polyomials at r
-    pub input_coins_opening: Vec<F>,
-    // openings of output coin polyomials at r
-    pub output_coins_opening: Vec<F>,
-    // opening of quotient polynomial at r
-    pub quotient_opening: F,
-    // openings of additional polynomials at r
-    pub additional_opening: Vec<F>,
-
-    pub input_coins_opening_proof: Vec<G1Affine>,
-    pub output_coins_opening_proof: Vec<G1Affine>,
-    pub quotient_opening_proof: G1Affine,
-    pub additional_opening_proof: Vec<G1Affine>,
-}
+use super::plonk_utils;
+use super::{ProverFnT, VerifierFnT, PlonkProof, KZG, F, G1Affine};
 
 pub fn plonk_prove<const N: usize>(
     crs: &JZKZGCommitmentParams<N>,
@@ -64,16 +18,16 @@ pub fn plonk_prove<const N: usize>(
     output_coins: &[Coin<F>],
     prover_fn: ProverFnT
 ) -> PlonkProof {
-    let kzg_crs = kzg_crs(crs);
+    let kzg_crs = plonk_utils::kzg_crs(crs);
 
     let input_coins_poly = input_coins
         .iter()
-        .map(|coin| coin_poly::<N>(coin))
+        .map(|coin| plonk_utils::coin_poly::<N>(coin))
         .collect::<Vec<DensePolynomial<F>>>();
 
     let output_coins_poly = output_coins
         .iter()
-        .map(|coin| coin_poly::<N>(coin))
+        .map(|coin| plonk_utils::coin_poly::<N>(coin))
         .collect::<Vec<DensePolynomial<F>>>();
 
     // compute the commitments
@@ -91,7 +45,7 @@ pub fn plonk_prove<const N: usize>(
     let mut ro_inputs = Vec::new();
     ro_inputs.extend_from_slice(input_coins_com.as_slice());
     ro_inputs.extend_from_slice(output_coins_com.as_slice());
-    let alpha = random_oracle(ro_inputs.as_slice());
+    let alpha = plonk_utils::random_oracle(ro_inputs.as_slice());
 
     //first Z(x)
     let z_poly: DensePolynomial<F> = utils::compute_vanishing_poly(N);
@@ -116,7 +70,7 @@ pub fn plonk_prove<const N: usize>(
     ro_inputs.extend_from_slice(input_coins_com.as_slice());
     ro_inputs.extend_from_slice(output_coins_com.as_slice());
     ro_inputs.push(quotient_com);
-    let r = random_oracle(ro_inputs.as_slice());
+    let r = plonk_utils::random_oracle(ro_inputs.as_slice());
     
     PlonkProof {
         input_coins_com,
@@ -181,13 +135,13 @@ pub fn plonk_verify<const N: usize>(
     ro_inputs.extend_from_slice(proof.input_coins_com.as_slice());
     ro_inputs.extend_from_slice(proof.output_coins_com.as_slice());
 
-    let alpha = random_oracle(ro_inputs.as_slice());
+    let alpha = plonk_utils::random_oracle(ro_inputs.as_slice());
 
     ro_inputs.push(proof.quotient_com);
 
-    let r = random_oracle(ro_inputs.as_slice());
+    let r = plonk_utils::random_oracle(ro_inputs.as_slice());
 
-    let kzg_crs = kzg_crs(crs);
+    let kzg_crs = plonk_utils::kzg_crs(crs);
 
     for i in 0..proof.input_coins_com.len() {
         assert!(
@@ -250,43 +204,3 @@ pub fn plonk_verify<const N: usize>(
     
 }
 
-fn kzg_crs<const N: usize>(
-    crs: &JZKZGCommitmentParams<N>
-) -> kzg::UniversalParams<Bls12_377> {
-
-    kzg::UniversalParams::<Bls12_377> {
-        powers_of_g: crs.crs_coefficient_g1
-            .to_owned()
-            .iter()
-            .map(|x| x.into_affine())
-            .collect(),
-        powers_of_h: crs.crs_coefficient_g2
-            .to_owned()
-            .iter()
-            .map(|x| x.into_affine())
-            .collect(),
-    }
-
-}
-
-fn coin_poly<const N: usize>(coin: &Coin<F>) -> DensePolynomial<F> {    
-    //powers of nth root of unity
-    let domain = Radix2EvaluationDomain::<F>::new(N).unwrap();
-    let eval_form = Evaluations::from_vec_and_domain(coin.to_vec(), domain);
-    //interpolated polynomial over the n points
-    eval_form.interpolate()
-}
-
-fn random_oracle(
-    commitments: &[G1Affine],
-) -> F {
-    let mut serialized_elements = Vec::new();
-    for com in commitments {
-        let mut serialized_data = Vec::new();
-        com.serialize_uncompressed(&mut serialized_data).unwrap();
-
-        serialized_elements.push(serialized_data);
-    }
-
-    utils::fs_hash(&serialized_elements, 1)[0]
-}

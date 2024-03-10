@@ -14,7 +14,7 @@ use ark_poly::univariate::DensePolynomial;
 use ark_poly::Polynomial;
 
 use crate::{protocol, utils};
-use crate::collaborative_snark::plonk::PlonkProof;
+use crate::collaborative_snark::PlonkProof;
 use crate::{vector_commitment, record_commitment, prf};
 use crate::vector_commitment::bytes::{*, constraints::*};
 use crate::record_commitment::{*, constraints::*};

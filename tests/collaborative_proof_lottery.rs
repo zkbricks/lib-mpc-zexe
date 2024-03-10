@@ -6,7 +6,7 @@ use ark_poly::{
 };
 
 use lib_mpc_zexe::utils;
-use lib_mpc_zexe::collaborative_snark::plonk::PlonkProof;
+use lib_mpc_zexe::collaborative_snark::PlonkProof;
 use lib_mpc_zexe::coin::*;
 
 type F = ark_bls12_377::Fr;

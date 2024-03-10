@@ -8,7 +8,7 @@ use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
 use ark_groth16::*;
 
 use crate::coin::*;
-use crate::collaborative_snark::plonk::*;
+use crate::collaborative_snark::*;
 use crate::prf::JZPRFParams;
 use crate::record_commitment::JZKZGCommitmentParams;
 use crate::vector_commitment::bytes::{

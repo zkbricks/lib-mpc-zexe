@@ -21,7 +21,7 @@ use lib_mpc_zexe::vector_commitment::bytes::{*, constraints::*};
 use lib_mpc_zexe::record_commitment::{*, constraints::*};
 use lib_mpc_zexe::prf::{*, constraints::*};
 use lib_mpc_zexe::coin::*;
-use lib_mpc_zexe::collaborative_snark::plonk::PlonkProof;
+use lib_mpc_zexe::collaborative_snark::PlonkProof;
 
 type F = ark_bls12_377::Fr;
 pub type ConstraintF = ark_bw6_761::Fr;
