@@ -5,6 +5,7 @@ mod kzg;
 mod plonk_utils;
 
 pub mod plonk;
+pub mod distributed_plonk;
 
 type Curve = ark_bls12_377::Bls12_377;
 type KZG = kzg::KZG10::<Curve, DensePolynomial<<Curve as Pairing>::ScalarField>>;
@@ -40,8 +41,12 @@ pub struct PlonkProof {
     // openings of additional polynomials at r
     pub additional_opening: Vec<F>,
 
+    // proof of openings of input coin polyomials at r
     pub input_coins_opening_proof: Vec<G1Affine>,
+    // proof of openings of output coin polyomials at r
     pub output_coins_opening_proof: Vec<G1Affine>,
+    // proof of opening of quotient polynomial at r
     pub quotient_opening_proof: G1Affine,
+    // proof of openings of additional polynomials at r
     pub additional_opening_proof: Vec<G1Affine>,
 }
