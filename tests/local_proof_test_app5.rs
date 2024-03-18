@@ -10,7 +10,7 @@ use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
 use ark_snark::SNARK;
 
 use lib_mpc_zexe::{vector_commitment, record_commitment, prf};
-use lib_mpc_zexe::vector_commitment::bytes::{*, constraints::*};
+use lib_mpc_zexe::vector_commitment::bytes::pedersen::{*, constraints::*};
 use lib_mpc_zexe::record_commitment::{*, constraints::*};
 use lib_mpc_zexe::prf::{*, constraints::*};
 use lib_mpc_zexe::coin::*;
@@ -115,7 +115,7 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
         proof_var.root_var.x.enforce_equal(&root_com_x)?;
         proof_var.root_var.y.enforce_equal(&root_com_y)?;
 
-        vector_commitment::bytes::constraints::generate_constraints(
+        vector_commitment::bytes::pedersen::constraints::generate_constraints(
             cs.clone(), &params_var, &proof_var
         );
 

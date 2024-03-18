@@ -8,7 +8,7 @@ use ark_relations::r1cs::*;
 use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
 use ark_snark::SNARK;
 
-use lib_mpc_zexe::vector_commitment::bytes::{*, constraints::*};
+use lib_mpc_zexe::vector_commitment::bytes::pedersen::{*, constraints::*};
 use lib_mpc_zexe::vector_commitment;
 
 pub type ConstraintF = ark_bw6_761::Fr;
@@ -54,7 +54,7 @@ impl ConstraintSynthesizer<ConstraintF> for PokOfRecordCircuit {
         proof_var.root_var.x.enforce_equal(&root_com_x)?;
         proof_var.root_var.y.enforce_equal(&root_com_y)?;
 
-        vector_commitment::bytes::constraints::generate_constraints(
+        vector_commitment::bytes::pedersen::constraints::generate_constraints(
             cs, &params_var, &proof_var
         );
         Ok(())
