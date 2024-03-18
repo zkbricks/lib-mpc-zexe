@@ -1,5 +1,5 @@
 use lib_mpc_zexe::protocol::JZVectorCommitmentOpeningProofBs58;
-use lib_mpc_zexe::vector_commitment::bytes::JZVectorCommitmentOpeningProof;
+use lib_mpc_zexe::vector_commitment::bytes::pedersen::JZVectorCommitmentOpeningProof;
 use reqwest::Client;
 use rand_chacha::rand_core::SeedableRng;
 use std::time::Instant;

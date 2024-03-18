@@ -59,7 +59,7 @@ use ark_poly::Polynomial;
 use crate::{protocol, utils};
 use crate::collaborative_snark::PlonkProof;
 use crate::{vector_commitment, record_commitment, prf};
-use crate::vector_commitment::bytes::{*, constraints::*};
+use crate::vector_commitment::bytes::pedersen::{*, constraints::*};
 use crate::record_commitment::{*, constraints::*};
 use crate::prf::{*, constraints::*};
 use crate::coin::*;
@@ -532,7 +532,7 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
         ).unwrap();
 
         // generate the merkle proof verification circuitry
-        vector_commitment::bytes::constraints::generate_constraints(
+        vector_commitment::bytes::pedersen::constraints::generate_constraints(
             cs.clone(), &merkle_params_var, &proof_var
         );
 
