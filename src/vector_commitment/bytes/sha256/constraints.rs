@@ -179,7 +179,7 @@ mod tests {
             path: path.clone(),
         };
 
-        assert!(verify_proof(&vc_params, &root, &records[0], &path));
+        assert!(verify_vc_opening_proof(&vc_params, &root, &records[0], &path));
 
         let cs = ConstraintSystem::<ConstraintF>::new_ref();
 
@@ -225,7 +225,7 @@ mod tests {
             path: path.clone(),
         };
 
-        assert!(verify_proof(&vc_params, &root, &records[idx], &path));
+        assert!(verify_vc_opening_proof(&vc_params, &root, &records[idx], &path));
 
         let cs = ConstraintSystem::<ConstraintF>::new_ref();
 
