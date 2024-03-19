@@ -232,6 +232,20 @@ impl FrontierMerkleTreeWithHistory {
         self.historical_roots.insert(new_root_index, current_level_hash);
         self.next_index += 1;
     }
+
+    pub fn is_known_root(&self, root: &JZVectorCommitment) -> bool {
+        let current_root_index = self.current_root_index;
+        let mut i = current_root_index;
+
+        loop {
+            if root == self.historical_roots.get(&i).unwrap() { return true; }
+            if i == 0 { i = self.root_history_size; }
+            i = i - 1;
+            if i == current_root_index { break; }
+        }
+
+        return false;
+    }
 }
 
 
