@@ -1440,6 +1440,7 @@ dependencies = [
  "ark-std",
  "bs58",
  "clap",
+ "hex",
  "num-bigint",
  "rand",
  "rand_chacha",
