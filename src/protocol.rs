@@ -12,12 +12,19 @@ use crate::collaborative_snark::*;
 use crate::prf::JZPRFParams;
 use crate::record_commitment::JZKZGCommitmentParams;
 use crate::vector_commitment::bytes::pedersen::{
-    JZVectorCommitment,
-    JZVectorCommitmentOpeningProof,
-    JZVectorCommitmentParams,
-    JZVectorCommitmentPath,
-    JZVectorCommitmentLeafDigest,
-    JZVectorCommitmentInnerDigest
+    JZVectorCommitment as JubJubVectorCommitment,
+    JZVectorCommitmentOpeningProof as JubJubVectorCommitmentOpeningProof,
+    JZVectorCommitmentParams as JubJubVectorCommitmentParams,
+    JZVectorCommitmentPath as JubJubVectorCommitmentPath,
+    JZVectorCommitmentLeafDigest as JubJubVectorCommitmentLeafDigest,
+    JZVectorCommitmentInnerDigest as JubJubVectorCommitmentInnerDigest
+};
+use crate::vector_commitment::bytes::sha256::{
+    JZVectorCommitment as Sha2VectorCommitment,
+    JZVectorCommitmentOpeningProof as Sha2VectorCommitmentOpeningProof,
+    JZVectorCommitmentPath as Sha2VectorCommitmentPath,
+    JZVectorCommitmentLeafDigest as Sha2VectorCommitmentLeafDigest,
+    JZVectorCommitmentInnerDigest as Sha2VectorCommitmentInnerDigest
 };
 
 type Curve = ark_bls12_377::Bls12_377;
@@ -26,17 +33,8 @@ type G1Affine = <Curve as Pairing>::G1Affine;
 type ConstraintF = ark_bw6_761::Fr;
 type ConstraintPairing = ark_bw6_761::BW6_761;
 
-
-// pub struct Path<P: Config> {
-//     pub leaf_sibling_hash: P::LeafDigest,
-//     /// The sibling of path node ordered from higher layer to lower layer (does not include root node).
-//     pub auth_path: Vec<P::InnerDigest>,
-//     /// stores the leaf index of the node
-//     pub leaf_index: usize,
-// }
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct JZVectorCommitmentOpeningProofBs58 {
+pub struct VectorCommitmentOpeningProofBs58 {
     pub path_leaf_sibling_hash: String,
     pub path_auth_path: Vec<String>,
     pub path_leaf_index: usize,
@@ -45,8 +43,8 @@ pub struct JZVectorCommitmentOpeningProofBs58 {
  }
 
  pub fn jz_vector_commitment_opening_proof_to_bs58(
-    proof: &JZVectorCommitmentOpeningProof<G1Affine>
- ) -> JZVectorCommitmentOpeningProofBs58 {
+    proof: &JubJubVectorCommitmentOpeningProof<G1Affine>
+ ) -> VectorCommitmentOpeningProofBs58 {
     let mut buffer: Vec<u8> = Vec::new();
     proof.path.leaf_sibling_hash.serialize_compressed(&mut buffer).unwrap();
     let path_leaf_sibling_hash = bs58::encode(buffer).into_string();
@@ -68,7 +66,7 @@ pub struct JZVectorCommitmentOpeningProofBs58 {
     proof.root.serialize_compressed(&mut buffer).unwrap();
     let root = bs58::encode(buffer).into_string();
 
-    JZVectorCommitmentOpeningProofBs58 {
+    VectorCommitmentOpeningProofBs58 {
         path_leaf_sibling_hash,
         path_auth_path,
         path_leaf_index: proof.path.leaf_index,
@@ -77,17 +75,49 @@ pub struct JZVectorCommitmentOpeningProofBs58 {
     }
 }
 
-pub fn jz_vector_commitment_opening_proof_from_bs58(
-    proof: &JZVectorCommitmentOpeningProofBs58
-) -> JZVectorCommitmentOpeningProof<G1Affine> {
+pub fn sha2_vector_commitment_opening_proof_from_bs58(
+    proof: &VectorCommitmentOpeningProofBs58
+) -> Sha2VectorCommitmentOpeningProof<Vec<u8>> {
 
     let buf: Vec<u8> = bs58::decode(proof.path_leaf_sibling_hash.clone()).into_vec().unwrap();
-    let leaf_digest = JZVectorCommitmentLeafDigest::deserialize_compressed(buf.as_slice()).unwrap();
+    let leaf_digest = Sha2VectorCommitmentLeafDigest::deserialize_compressed(buf.as_slice()).unwrap();
 
-    let mut nodes: Vec<JZVectorCommitmentInnerDigest> = vec![];
+    let mut nodes: Vec<Sha2VectorCommitmentInnerDigest> = vec![];
     for node in proof.path_auth_path.iter() {
         let buf: Vec<u8> = bs58::decode(node.clone()).into_vec().unwrap();
-        let node = JZVectorCommitmentInnerDigest::deserialize_compressed(buf.as_slice()).unwrap();
+        let node = Sha2VectorCommitmentInnerDigest::deserialize_compressed(buf.as_slice()).unwrap();
+
+        nodes.push(node);
+    }
+
+    let buf: Vec<u8> = bs58::decode(proof.record.clone()).into_vec().unwrap();
+    let record = buf;
+
+    let buf: Vec<u8> = bs58::decode(proof.root.clone()).into_vec().unwrap();
+    let root = Sha2VectorCommitment::deserialize_compressed(buf.as_slice()).unwrap();
+
+    Sha2VectorCommitmentOpeningProof::<Vec<u8>> {
+        path: Sha2VectorCommitmentPath {
+            leaf_sibling_hash: leaf_digest,
+            auth_path: nodes,
+            leaf_index: proof.path_leaf_index,
+        },
+        record,
+        root,
+    }
+}
+
+pub fn jubjub_vector_commitment_opening_proof_from_bs58(
+    proof: &VectorCommitmentOpeningProofBs58
+) -> JubJubVectorCommitmentOpeningProof<G1Affine> {
+
+    let buf: Vec<u8> = bs58::decode(proof.path_leaf_sibling_hash.clone()).into_vec().unwrap();
+    let leaf_digest = JubJubVectorCommitmentLeafDigest::deserialize_compressed(buf.as_slice()).unwrap();
+
+    let mut nodes: Vec<JubJubVectorCommitmentInnerDigest> = vec![];
+    for node in proof.path_auth_path.iter() {
+        let buf: Vec<u8> = bs58::decode(node.clone()).into_vec().unwrap();
+        let node = JubJubVectorCommitmentInnerDigest::deserialize_compressed(buf.as_slice()).unwrap();
 
         nodes.push(node);
     }
@@ -96,10 +126,10 @@ pub fn jz_vector_commitment_opening_proof_from_bs58(
     let record = G1Affine::deserialize_compressed(buf.as_slice()).unwrap();
 
     let buf: Vec<u8> = bs58::decode(proof.root.clone()).into_vec().unwrap();
-    let root = JZVectorCommitment::deserialize_compressed(buf.as_slice()).unwrap();
+    let root = JubJubVectorCommitment::deserialize_compressed(buf.as_slice()).unwrap();
 
-    JZVectorCommitmentOpeningProof {
-        path: JZVectorCommitmentPath {
+    JubJubVectorCommitmentOpeningProof {
+        path: JubJubVectorCommitmentPath {
             leaf_sibling_hash: leaf_digest,
             auth_path: nodes,
             leaf_index: proof.path_leaf_index,
@@ -449,14 +479,14 @@ fn encode_g1_as_bs58_str(value: &G1Affine) -> String {
     bs58::encode(serialized_msg).into_string()
 }
 
-pub fn trusted_setup() -> (JZPRFParams, JZVectorCommitmentParams, JZKZGCommitmentParams<8>) {
+pub fn trusted_setup() -> (JZPRFParams, JubJubVectorCommitmentParams, JZKZGCommitmentParams<8>) {
     let seed = [0u8; 32];
     let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
 
     // TODO: for now we sample the public parameters directly;
     // we should change this to load from a file produced by a trusted setup
     let prf_params = JZPRFParams::trusted_setup(&mut rng);
-    let vc_params = JZVectorCommitmentParams::trusted_setup(&mut rng);
+    let vc_params = JubJubVectorCommitmentParams::trusted_setup(&mut rng);
     let crs = JZKZGCommitmentParams::<8>::trusted_setup(&mut rng);
 
     (prf_params, vc_params, crs)

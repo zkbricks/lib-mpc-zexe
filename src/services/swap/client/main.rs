@@ -1,4 +1,4 @@
-use lib_mpc_zexe::protocol::JZVectorCommitmentOpeningProofBs58;
+use lib_mpc_zexe::protocol::VectorCommitmentOpeningProofBs58;
 use lib_mpc_zexe::vector_commitment::bytes::pedersen::JZVectorCommitmentOpeningProof;
 use reqwest::Client;
 use rand_chacha::rand_core::SeedableRng;
@@ -24,10 +24,9 @@ async fn get_merkle_proof(index: usize)
         .text()
         .await?;
 
-    let merkle_proof_bs58: JZVectorCommitmentOpeningProofBs58 = 
-        serde_json::from_str(&response).unwrap();
+    let merkle_proof_bs58: VectorCommitmentOpeningProofBs58 = serde_json::from_str(&response).unwrap();
 
-    Ok(protocol::jz_vector_commitment_opening_proof_from_bs58(&merkle_proof_bs58))
+    Ok(protocol::jubjub_vector_commitment_opening_proof_from_bs58(&merkle_proof_bs58))
 }
 
 async fn onramp_order(item: protocol::OnRampTransaction) -> reqwest::Result<()> {
