@@ -42,7 +42,7 @@ async fn get_merkle_proof(
 
     drop(state);
 
-    let merkle_proof_bs58 = protocol::jz_vector_commitment_opening_proof_to_bs58(
+    let merkle_proof_bs58 = protocol::jubjub_vector_commitment_opening_proof_to_bs58(
         &merkle_proof
     );
 

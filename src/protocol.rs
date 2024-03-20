@@ -42,8 +42,41 @@ pub struct VectorCommitmentOpeningProofBs58 {
     pub root: String
  }
 
- pub fn jz_vector_commitment_opening_proof_to_bs58(
+ pub fn jubjub_vector_commitment_opening_proof_to_bs58(
     proof: &JubJubVectorCommitmentOpeningProof<G1Affine>
+ ) -> VectorCommitmentOpeningProofBs58 {
+    let mut buffer: Vec<u8> = Vec::new();
+    proof.path.leaf_sibling_hash.serialize_compressed(&mut buffer).unwrap();
+    let path_leaf_sibling_hash = bs58::encode(buffer).into_string();
+
+    let mut path_auth_path = Vec::new();
+    for inner_digest in proof.path.auth_path.iter() {
+        let mut buffer: Vec<u8> = Vec::new();
+        inner_digest.serialize_compressed(&mut buffer).unwrap();
+        let inner_digest_serialized = bs58::encode(buffer).into_string();
+
+        path_auth_path.push(inner_digest_serialized);
+    }
+
+    let mut buffer: Vec<u8> = Vec::new();
+    proof.record.serialize_compressed(&mut buffer).unwrap();
+    let record = bs58::encode(buffer).into_string();
+
+    let mut buffer: Vec<u8> = Vec::new();
+    proof.root.serialize_compressed(&mut buffer).unwrap();
+    let root = bs58::encode(buffer).into_string();
+
+    VectorCommitmentOpeningProofBs58 {
+        path_leaf_sibling_hash,
+        path_auth_path,
+        path_leaf_index: proof.path.leaf_index,
+        record,
+        root
+    }
+}
+
+ pub fn sha2_vector_commitment_opening_proof_to_bs58(
+    proof: &Sha2VectorCommitmentOpeningProof<Vec<u8>>
  ) -> VectorCommitmentOpeningProofBs58 {
     let mut buffer: Vec<u8> = Vec::new();
     proof.path.leaf_sibling_hash.serialize_compressed(&mut buffer).unwrap();
