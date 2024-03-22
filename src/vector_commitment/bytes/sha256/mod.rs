@@ -200,7 +200,7 @@ impl FrontierMerkleTreeWithHistory {
 
     // insert a new leaf into the merkle tree
     pub fn insert(&mut self, leaf: &JZVectorCommitmentLeafDigest) {
-        assert!(self.next_index < (1 << self.levels) - 1, "Merkle tree is full");
+        assert!(self.next_index < (1 << self.levels), "Merkle tree is full");
 
         let mut current_index = self.next_index;
 
