@@ -11,7 +11,7 @@ use ark_std::{*, rand::RngCore};
 use lib_mpc_zexe::coin::*;
 use lib_mpc_zexe::apps::swap;
 use lib_mpc_zexe::apps::onramp;
-use lib_mpc_zexe::record_commitment::*;
+use lib_mpc_zexe::record_commitment::kzg::*;
 use lib_mpc_zexe::protocol as protocol;
 
 async fn get_merkle_proof(index: usize)

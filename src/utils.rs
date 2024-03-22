@@ -2,6 +2,7 @@ use ark_ff::*;
 use ark_std::*;
 use ark_ff::{
     PrimeField,
+    BigInt,
     field_hashers::{DefaultFieldHasher, HashToField},
 };
 use ark_crypto_primitives::crh::sha256::Sha256;
@@ -12,6 +13,12 @@ use ark_poly::{
     Radix2EvaluationDomain,
     Evaluations
 };
+
+pub fn bytes_to_field<F, const N: usize>(bytes: &[u8]) -> F 
+    where F: PrimeField + From<BigInt<N>>
+{
+    F::from(BigInt::<N>::from_bits_le(bytes_to_bits(bytes).as_slice()))
+}
 
 pub fn bytes_to_bits(bytes: &[u8]) -> Vec<bool> {
     let mut bits = Vec::with_capacity(bytes.len() * 8);

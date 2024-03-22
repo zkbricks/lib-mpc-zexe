@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use std::time::Instant;
 
 use lib_mpc_zexe::coin::*;
-use lib_mpc_zexe::record_commitment::JZRecord;
+use lib_mpc_zexe::record_commitment::kzg::JZRecord;
 use lib_mpc_zexe::vector_commitment::bytes::pedersen::{
     JZVectorDB,
     JZVectorCommitmentOpeningProof,

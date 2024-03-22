@@ -13,7 +13,7 @@ use ark_snark::SNARK;
 
 use crate::{protocol, utils};
 use crate::record_commitment;
-use crate::record_commitment::{*, constraints::*};
+use crate::record_commitment::kzg::{*, constraints::*};
 use crate::coin::*;
 
 // Finite Field used to encode the zk circuit
@@ -118,7 +118,7 @@ impl ConstraintSynthesizer<ConstraintF> for OnRampCircuit {
 
         // fire off the constraint generation which will include the 
         // circuitry to compute the KZG commitment
-        record_commitment::constraints::generate_constraints(
+        record_commitment::kzg::constraints::generate_constraints(
             cs.clone(),
             &crs_var,
             &unspent_coin_var

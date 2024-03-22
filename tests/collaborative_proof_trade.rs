@@ -185,7 +185,7 @@ pub fn verifier<const N: usize>(
 mod tests {
     use rand_chacha::rand_core::SeedableRng;
     use rand::RngCore;
-    use lib_mpc_zexe::record_commitment::*;
+    use lib_mpc_zexe::record_commitment::kzg::*;
     use lib_mpc_zexe::collaborative_snark::plonk::*;
 
     use super::*;

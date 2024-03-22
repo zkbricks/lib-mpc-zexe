@@ -12,7 +12,7 @@ use ark_snark::SNARK;
 use lib_mpc_zexe::utils;
 use lib_mpc_zexe::{vector_commitment, record_commitment, prf};
 use lib_mpc_zexe::vector_commitment::bytes::pedersen::{*, constraints::*};
-use lib_mpc_zexe::record_commitment::{*, constraints::*};
+use lib_mpc_zexe::record_commitment::kzg::{*, constraints::*};
 use lib_mpc_zexe::prf::{*, constraints::*};
 use lib_mpc_zexe::coin::*;
 
@@ -74,7 +74,7 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
             || { Ok(computed_com.y) },
         ).unwrap();
 
-        record_commitment::constraints::generate_constraints(
+        record_commitment::kzg::constraints::generate_constraints(
             cs.clone(),
             &crs_var,
             &coin_var

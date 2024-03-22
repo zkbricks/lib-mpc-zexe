@@ -10,7 +10,7 @@ use ark_groth16::*;
 use crate::coin::*;
 use crate::collaborative_snark::*;
 use crate::prf::JZPRFParams;
-use crate::record_commitment::JZKZGCommitmentParams;
+use crate::record_commitment::kzg::JZKZGCommitmentParams;
 use crate::vector_commitment::bytes::pedersen::{
     JZVectorCommitment as JubJubVectorCommitment,
     JZVectorCommitmentOpeningProof as JubJubVectorCommitmentOpeningProof,

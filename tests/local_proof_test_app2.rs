@@ -10,7 +10,7 @@ use ark_relations::r1cs::*;
 use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
 use ark_snark::SNARK;
 
-use lib_mpc_zexe::record_commitment::{*, constraints::*};
+use lib_mpc_zexe::record_commitment::kzg::{*, constraints::*};
 use lib_mpc_zexe::record_commitment;
 
 pub type ConstraintF = ark_bw6_761::Fr;
@@ -41,7 +41,7 @@ impl ConstraintSynthesizer<ConstraintF> for RecordComCircuit {
             || { Ok(computed_com.y) },
         ).unwrap();
 
-        record_commitment::constraints::generate_constraints(
+        record_commitment::kzg::constraints::generate_constraints(
             cs,
             &crs_var,
             &coin_var

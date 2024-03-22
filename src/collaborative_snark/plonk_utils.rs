@@ -11,7 +11,7 @@ use ark_serialize::CanonicalSerialize;
 use ark_bls12_377::Bls12_377;
 
 use crate::utils;
-use crate::record_commitment::*;
+use crate::record_commitment::kzg::*;
 use crate::coin::*;
 use super::kzg;
 

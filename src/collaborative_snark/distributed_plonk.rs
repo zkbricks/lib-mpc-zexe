@@ -10,7 +10,7 @@ use ark_poly::{
 use rand_chacha::rand_core::SeedableRng;
 
 use crate::utils;
-use crate::record_commitment::*;
+use crate::record_commitment::kzg::*;
 use crate::coin::*;
 use super::plonk_utils;
 use super::{ProverFnT, VerifierFnT, PlonkProof, KZG, F, G1Affine};

@@ -17,7 +17,7 @@ use crate::{protocol, utils};
 use crate::collaborative_snark::PlonkProof;
 use crate::{vector_commitment, record_commitment, prf};
 use crate::vector_commitment::bytes::pedersen::{*, constraints::*};
-use crate::record_commitment::{*, constraints::*};
+use crate::record_commitment::kzg::{*, constraints::*};
 use crate::prf::{*, constraints::*};
 use crate::coin::*;
 
@@ -254,7 +254,7 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
         // trigger the constraint generation, which includes the KZG computation;
         // the coin_var includes the variable for the "computed" commitment, so 
         // we will enforce equality of that with the input variable above
-        record_commitment::constraints::generate_constraints(
+        record_commitment::kzg::constraints::generate_constraints(
             cs.clone(),
             &crs_var,
             &placeholder_coin_var
@@ -311,7 +311,7 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
 
         // fire off the constraint generation which will include the 
         // circuitry to compute the KZG commitment
-        record_commitment::constraints::generate_constraints(
+        record_commitment::kzg::constraints::generate_constraints(
             cs.clone(),
             &crs_var,
             &input_coin_var
@@ -343,7 +343,7 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
 
         // fire off the constraint generation which will include the 
         // circuitry to compute the KZG commitment
-        record_commitment::constraints::generate_constraints(
+        record_commitment::kzg::constraints::generate_constraints(
             cs.clone(),
             &crs_var,
             &unspent_coin_var
