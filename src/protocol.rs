@@ -124,7 +124,7 @@ pub fn sha2_vector_commitment_opening_proof_from_bs58(
     }
 
     let buf: Vec<u8> = bs58::decode(proof.record.clone()).into_vec().unwrap();
-    let record = buf;
+    let record = Sha2VectorCommitment::deserialize_compressed(buf.as_slice()).unwrap();
 
     let buf: Vec<u8> = bs58::decode(proof.root.clone()).into_vec().unwrap();
     let root = Sha2VectorCommitment::deserialize_compressed(buf.as_slice()).unwrap();
