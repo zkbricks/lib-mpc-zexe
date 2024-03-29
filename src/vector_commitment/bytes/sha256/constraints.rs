@@ -106,7 +106,12 @@ impl<L: CanonicalSerialize + Clone>
                 mode
             )?;
 
-            let record_bytes = to_uncompressed_bytes!(opening_proof.record).unwrap();
+            let mut record_bytes = Vec::new();
+            opening_proof.record
+                .borrow()
+                .serialize_compressed(&mut record_bytes)
+                .unwrap();
+
             let mut leaf_byte_vars = Vec::<UInt8<ConstraintF>>::new();
             for byte in record_bytes {
                 leaf_byte_vars.push(UInt8::<ConstraintF>::new_variable(
