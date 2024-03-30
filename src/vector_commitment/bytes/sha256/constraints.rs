@@ -4,7 +4,6 @@ use ark_crypto_primitives::{
         sha256::constraints::Sha256Gadget,
     },
     merkle_tree::constraints::{PathVar, BytesVarDigestConverter, ConfigGadget},
-    to_uncompressed_bytes
 };
 
 use ark_ed_on_bw6_761::Fq;
@@ -85,7 +84,7 @@ impl AllocVar<JZVectorCommitmentParams, ConstraintF> for JZVectorCommitmentParam
 pub struct JZVectorCommitmentOpeningProofVar {
     path_var: PathVar<Sha256MerkleTreeParams, ConstraintF, Sha256MerkleTreeParamsVar>,
     pub leaf_var: Vec<UInt8<ConstraintF>>,
-    pub root_var: <LeafHG as CRHSchemeGadget<LeafH, ConstraintF>>::OutputVar,
+    pub root_var: <CompressHG as TwoToOneCRHSchemeGadget<CompressH, ConstraintF>>::OutputVar,
 }
 
 impl<L: CanonicalSerialize + Clone> 
@@ -100,7 +99,7 @@ impl<L: CanonicalSerialize + Clone>
             
             let opening_proof: &JZVectorCommitmentOpeningProof<L> = val.borrow();
 
-            let root_var = <LeafHG as CRHSchemeGadget<LeafH, ConstraintF>>::OutputVar::new_variable(
+            let root_var = <CompressHG as TwoToOneCRHSchemeGadget<CompressH, ConstraintF>>::OutputVar::new_variable(
                 cs.clone(), 
                 || Ok(opening_proof.root.clone()),
                 mode
