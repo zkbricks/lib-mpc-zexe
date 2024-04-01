@@ -246,6 +246,10 @@ impl FrontierMerkleTreeWithHistory {
 
         return false;
     }
+
+    pub fn get_latest_root(&self) -> JZVectorCommitment {
+        self.historical_roots.get(&self.current_root_index).unwrap().clone()
+    }
 }
 
 
