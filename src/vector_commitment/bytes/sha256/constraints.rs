@@ -108,7 +108,7 @@ impl<L: CanonicalSerialize + Clone>
             let mut record_bytes = Vec::new();
             opening_proof.record
                 .borrow()
-                .serialize_compressed(&mut record_bytes)
+                .serialize_uncompressed(&mut record_bytes)
                 .unwrap();
 
             let mut leaf_byte_vars = Vec::<UInt8<ConstraintF>>::new();

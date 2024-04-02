@@ -62,9 +62,13 @@ impl<L: CanonicalSerialize + Clone> JZVectorDB<L> {
     ) -> Self {
 
         let sha256_params = ();
-        let leaves: Vec<_> = records
+        let leaves: Vec<Vec<u8>> = records
             .iter()
-            .map(|leaf| to_uncompressed_bytes!(leaf).unwrap())
+            .map(|leaf| {
+                let mut leaf_bytes = Vec::new();
+                leaf.serialize_uncompressed(&mut leaf_bytes).unwrap();
+                leaf_bytes
+            })
             .collect();
 
         let tree = Sha256MerkleTree::new(
