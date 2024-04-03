@@ -18,8 +18,6 @@ use crate::coin::*;
 
 // Finite Field used to encode the zk circuit
 type ConstraintF = ark_bw6_761::Fr;
-// Finite Field used to encode the coin data structure
-type F = ark_bls12_377::Fr;
 
 // the public inputs in the Groth proof are ordered as follows
 #[allow(non_camel_case_types)]

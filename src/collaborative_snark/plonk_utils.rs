@@ -16,10 +16,8 @@ use crate::coin::*;
 use super::kzg;
 
 type Curve = ark_bls12_377::Bls12_377;
-type KZG = kzg::KZG10::<Curve, DensePolynomial<<Curve as Pairing>::ScalarField>>;
 type F = ark_bls12_377::Fr;
 type G1Affine = <Curve as Pairing>::G1Affine;
-type G2Affine = <Curve as Pairing>::G2Affine;
 
 pub fn kzg_crs<const N: usize>(
     crs: &JZKZGCommitmentParams<N>

@@ -1,8 +1,8 @@
 use ark_crypto_primitives::{
     crh::{sha256::Sha256, CRHScheme, TwoToOneCRHScheme},
-    merkle_tree::{Config, DigestConverter, MerkleTree},
     Error,
 };
+use crate::merkle_tree::{Config, DigestConverter, MerkleTree};
 
 pub type LeafH = Sha256;
 pub type CompressH = Sha256;

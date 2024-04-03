@@ -5,11 +5,8 @@ use common::*;
 
 use std::{collections::HashMap, marker::PhantomData};
 
-use ark_crypto_primitives::{
-    crh::{CRHScheme, TwoToOneCRHScheme},
-    merkle_tree::{Config, Path},
-    to_uncompressed_bytes
-};
+use ark_crypto_primitives::{crh::{CRHScheme, TwoToOneCRHScheme}, to_uncompressed_bytes};
+use crate::merkle_tree::{Config, Path};
 
 use ark_std::rand::Rng;
 use ark_serialize::CanonicalSerialize;

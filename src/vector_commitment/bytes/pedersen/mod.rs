@@ -5,11 +5,8 @@ use common::*;
 
 use std::marker::PhantomData;
 
-use ark_crypto_primitives::{
-    crh::*,
-    merkle_tree::*,
-    to_uncompressed_bytes
-};
+use ark_crypto_primitives::{crh::*, to_uncompressed_bytes};
+use crate::merkle_tree::*;
 use ark_std::rand::Rng;
 use ark_serialize::CanonicalSerialize;
 use ark_std::borrow::*;
@@ -38,14 +35,14 @@ type JubJubMerkleTree = MerkleTree<JubJubMerkleTreeParams>;
 
 pub type JZVectorCommitmentPath = Path<JubJubMerkleTreeParams>;
 pub type JZVectorCommitmentLeafDigest = 
-    <JubJubMerkleTreeParams as ark_crypto_primitives::merkle_tree::Config>
+    <JubJubMerkleTreeParams as crate::merkle_tree::Config>
     ::LeafDigest;
 pub type JZVectorCommitmentInnerDigest = 
-    <JubJubMerkleTreeParams as ark_crypto_primitives::merkle_tree::Config>
+    <JubJubMerkleTreeParams as crate::merkle_tree::Config>
     ::InnerDigest;
 
 pub type JZVectorCommitment = 
-    <JubJubMerkleTreeParams as ark_crypto_primitives::merkle_tree::Config>
+    <JubJubMerkleTreeParams as crate::merkle_tree::Config>
     ::InnerDigest;
 
 pub struct JZVectorDB<L: CanonicalSerialize + Clone> {

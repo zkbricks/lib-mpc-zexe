@@ -1,11 +1,8 @@
-use ark_crypto_primitives::{
-    crh::{
+use ark_crypto_primitives::crh::{
         constraints::{CRHSchemeGadget, TwoToOneCRHSchemeGadget},
         sha256::constraints::Sha256Gadget,
-    },
-    merkle_tree::constraints::{PathVar, BytesVarDigestConverter, ConfigGadget},
 };
-
+use crate::merkle_tree::constraints::{PathVar, BytesVarDigestConverter, ConfigGadget};
 use ark_ed_on_bw6_761::Fq;
 #[allow(unused)]
 use ark_r1cs_std::prelude::*;

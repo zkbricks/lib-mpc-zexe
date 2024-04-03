@@ -1,9 +1,8 @@
 use ark_crypto_primitives::{
     to_uncompressed_bytes,
     crh::{pedersen, CRHSchemeGadget, TwoToOneCRHSchemeGadget},
-    merkle_tree::constraints::{BytesVarDigestConverter, ConfigGadget},
-    merkle_tree::constraints::PathVar,
 };
+use crate::merkle_tree::constraints::{BytesVarDigestConverter, ConfigGadget, PathVar};
 //use ark_ed_on_bls12_377::{constraints::EdwardsVar, EdwardsProjective as JubJub, Fq};
 use ark_ed_on_bw6_761::{constraints::EdwardsVar, EdwardsProjective as JubJub, Fq};
 #[allow(unused)]

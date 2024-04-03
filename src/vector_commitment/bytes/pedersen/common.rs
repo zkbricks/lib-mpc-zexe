@@ -1,7 +1,5 @@
-use ark_crypto_primitives::{
-    crh::{pedersen, *},
-    merkle_tree::*
-};
+use ark_crypto_primitives::crh::{pedersen, *};
+use crate::merkle_tree::*;
 //use ark_ed_on_bls12_377::EdwardsProjective as JubJub;
 use ark_ed_on_bw6_761::EdwardsProjective as JubJub;
 
