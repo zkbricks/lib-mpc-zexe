@@ -91,13 +91,13 @@ type TwoToOneParam<PG, P, ConstraintF> =
 #[derivative(Clone(bound = "P: Config, ConstraintF: Field, PG: ConfigGadget<P, ConstraintF>"))]
 pub struct PathVar<P: Config, ConstraintF: Field, PG: ConfigGadget<P, ConstraintF>> {
     /// `path[i]` is 0 (false) iff ith non-leaf node from top to bottom is left.
-    path: Vec<Boolean<ConstraintF>>,
+    pub path: Vec<Boolean<ConstraintF>>,
     /// `auth_path[i]` is the entry of sibling of ith non-leaf node from top to bottom.
-    auth_path: Vec<PG::InnerDigest>,
+    pub auth_path: Vec<PG::InnerDigest>,
     /// The sibling of leaf.
-    leaf_sibling: PG::LeafDigest,
+    pub leaf_sibling: PG::LeafDigest,
     /// Is this leaf the right child?
-    leaf_is_right_child: Boolean<ConstraintF>,
+    pub leaf_is_right_child: Boolean<ConstraintF>,
 }
 
 impl<P: Config, ConstraintF: Field, PG: ConfigGadget<P, ConstraintF>> AllocVar<Path<P>, ConstraintF>
