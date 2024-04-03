@@ -27,7 +27,7 @@ type LeafVar<ConstraintF> = [UInt8<ConstraintF>];
 type ConstraintF = Fq;
 
 #[derive(Debug)]
-struct Sha256MerkleTreeParamsVar;
+pub struct Sha256MerkleTreeParamsVar;
 
 impl ConfigGadget<Sha256MerkleTreeParams, ConstraintF> for Sha256MerkleTreeParamsVar {
     type Leaf = LeafVar<ConstraintF>;
@@ -82,7 +82,7 @@ impl AllocVar<JZVectorCommitmentParams, ConstraintF> for JZVectorCommitmentParam
 }
 
 pub struct JZVectorCommitmentOpeningProofVar {
-    path_var: PathVar<Sha256MerkleTreeParams, ConstraintF, Sha256MerkleTreeParamsVar>,
+    pub path_var: PathVar<Sha256MerkleTreeParams, ConstraintF, Sha256MerkleTreeParamsVar>,
     pub leaf_var: Vec<UInt8<ConstraintF>>,
     pub root_var: <CompressHG as TwoToOneCRHSchemeGadget<CompressH, ConstraintF>>::OutputVar,
 }
