@@ -23,7 +23,9 @@ type CompressHG = pedersen::constraints::TwoToOneCRHGadget<JubJub, EdwardsVar, W
 type LeafVar<ConstraintF> = [UInt8<ConstraintF>];
 
 type ConstraintF = Fq;
-struct JubJubMerkleTreeParamsVar;
+
+pub struct JubJubMerkleTreeParamsVar;
+
 impl ConfigGadget<JubJubMerkleTreeParams, ConstraintF> for JubJubMerkleTreeParamsVar {
     type Leaf = LeafVar<ConstraintF>;
     type LeafDigest = <LeafHG as CRHSchemeGadget<LeafH, ConstraintF>>::OutputVar;
@@ -77,7 +79,7 @@ impl AllocVar<JZVectorCommitmentParams, ConstraintF> for JZVectorCommitmentParam
 }
 
 pub struct JZVectorCommitmentOpeningProofVar {
-    path_var: PathVar<JubJubMerkleTreeParams, Fq, JubJubMerkleTreeParamsVar>,
+    pub path_var: PathVar<JubJubMerkleTreeParams, Fq, JubJubMerkleTreeParamsVar>,
     pub leaf_var: Vec<UInt8<ConstraintF>>,
     pub root_var: <LeafHG as CRHSchemeGadget<LeafH, ConstraintF>>::OutputVar,
 }
