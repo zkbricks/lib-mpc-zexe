@@ -103,7 +103,7 @@ impl<L: CanonicalSerialize + Clone> JZVectorDB<L> {
 
     pub fn get_record(&self, index: usize) -> &L {
         if index >= self.records.len() {
-            panic!("Index out of bounds");
+            panic!("Index out of bounds: {}", index);
         }
 
         &self.records[index]
@@ -111,7 +111,7 @@ impl<L: CanonicalSerialize + Clone> JZVectorDB<L> {
 
     pub fn update(&mut self, index: usize, record: &L) {
         if index >= self.records.len() {
-            panic!("Index out of bounds");
+            panic!("Index out of bounds: {}", index);
         }
 
         self.records[index] = record.clone();
