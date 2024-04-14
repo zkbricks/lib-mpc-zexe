@@ -14,8 +14,11 @@ use lib_mpc_zexe::apps::onramp;
 use lib_mpc_zexe::record_commitment::kzg::*;
 use lib_mpc_zexe::protocol as protocol;
 
+type MT = lib_mpc_zexe::vector_commitment::bytes::pedersen::config::ed_on_bw6_761::MerkleTreeParams;
+type MTVar = lib_mpc_zexe::vector_commitment::bytes::pedersen::config::ed_on_bw6_761::MerkleTreeParamsVar;
+
 async fn get_merkle_proof(index: usize)
--> reqwest::Result<JZVectorCommitmentOpeningProof<ark_bls12_377::G1Affine>> {
+-> reqwest::Result<JZVectorCommitmentOpeningProof<MT, ark_bls12_377::G1Affine>> {
     let client = Client::new();
     let response = client.get("http://127.0.0.1:8082/getmerkleproof")
         .json(&index)
@@ -27,7 +30,7 @@ async fn get_merkle_proof(index: usize)
     let merkle_proof_bs58: VectorCommitmentOpeningProofBs58 = 
         serde_json::from_str(&response).unwrap();
 
-    Ok(protocol::jubjub_vector_commitment_opening_proof_from_bs58(&merkle_proof_bs58))
+    Ok(protocol::jubjub_vector_commitment_opening_proof_MTEdOnBw6_761_from_bs58(&merkle_proof_bs58))
 }
 
 async fn onramp_order(item: protocol::OnRampTransaction) -> reqwest::Result<()> {

@@ -1,10 +1,9 @@
 use ark_crypto_primitives::{
     to_uncompressed_bytes,
-    crh::{pedersen, CRHSchemeGadget, TwoToOneCRHSchemeGadget},
+    crh::{CRHSchemeGadget, TwoToOneCRHSchemeGadget},
 };
-use crate::merkle_tree::constraints::{BytesVarDigestConverter, ConfigGadget, PathVar};
-//use ark_ed_on_bls12_377::{constraints::EdwardsVar, EdwardsProjective as JubJub, Fq};
-use ark_ed_on_bw6_761::{constraints::EdwardsVar, EdwardsProjective as JubJub, Fq};
+use crate::merkle_tree::constraints::{ConfigGadget, PathVar};
+
 #[allow(unused)]
 use ark_r1cs_std::prelude::*;
 #[allow(unused)]
@@ -15,36 +14,18 @@ use ark_relations::r1cs::*;
 use ark_r1cs_std::{bits::uint8::UInt8, alloc::AllocVar};
 
 use super::*;
-use super::common::*;
 
-type LeafHG = pedersen::constraints::CRHGadget<JubJub, EdwardsVar, Window4x256>;
-type CompressHG = pedersen::constraints::TwoToOneCRHGadget<JubJub, EdwardsVar, Window4x256>;
-
-type LeafVar<ConstraintF> = [UInt8<ConstraintF>];
-
-type ConstraintF = Fq;
-
-pub struct JubJubMerkleTreeParamsVar;
-
-impl ConfigGadget<JubJubMerkleTreeParams, ConstraintF> for JubJubMerkleTreeParamsVar {
-    type Leaf = LeafVar<ConstraintF>;
-    type LeafDigest = <LeafHG as CRHSchemeGadget<LeafH, ConstraintF>>::OutputVar;
-    type LeafInnerConverter = BytesVarDigestConverter<Self::LeafDigest, ConstraintF>;
-    type InnerDigest =
-        <CompressHG as TwoToOneCRHSchemeGadget<CompressH, ConstraintF>>::OutputVar;
-    type LeafHash = LeafHG;
-    type TwoToOneHash = CompressHG;
-}
-
-pub struct JZVectorCommitmentParamsVar {
+pub struct JZVectorCommitmentParamsVar<ConstraintF: Field, P: Config, PG: ConfigGadget<P, ConstraintF>>
+{
     pub leaf_crh_params_var: 
-        <LeafHG as CRHSchemeGadget<LeafH, ConstraintF>>::ParametersVar,
+        <PG::LeafHash as CRHSchemeGadget<P::LeafHash, ConstraintF>>::ParametersVar,
     pub two_to_one_crh_params_var: 
-        <CompressHG as TwoToOneCRHSchemeGadget<CompressH, ConstraintF>>::ParametersVar,
+        <PG::TwoToOneHash as TwoToOneCRHSchemeGadget<P::TwoToOneHash, ConstraintF>>::ParametersVar,
 }
 
-impl AllocVar<JZVectorCommitmentParams, ConstraintF> for JZVectorCommitmentParamsVar {
-    fn new_variable<T: Borrow<JZVectorCommitmentParams>>(
+impl<P: Config, ConstraintF: Field, PG: ConfigGadget<P, ConstraintF>>
+    AllocVar<JZVectorCommitmentParams<P>, ConstraintF> for JZVectorCommitmentParamsVar<ConstraintF, P, PG> {
+    fn new_variable<T: Borrow<JZVectorCommitmentParams<P>>>(
         cs: impl Into<Namespace<ConstraintF>>,
         f: impl FnOnce() -> Result<T>,
         mode: AllocationMode
@@ -53,7 +34,7 @@ impl AllocVar<JZVectorCommitmentParams, ConstraintF> for JZVectorCommitmentParam
             let cs = cs.into();
             
             let leaf_crh_params_var =
-                <LeafHG as CRHSchemeGadget<LeafH, _>>::ParametersVar::
+                <PG::LeafHash as CRHSchemeGadget<P::LeafHash, _>>::ParametersVar::
                 new_variable(
                     cs.clone(),
                     || Ok(&val.borrow().leaf_crh_params),
@@ -61,7 +42,7 @@ impl AllocVar<JZVectorCommitmentParams, ConstraintF> for JZVectorCommitmentParam
                 )?;
 
             let two_to_one_crh_params_var =
-                <CompressHG as TwoToOneCRHSchemeGadget<CompressH, _>>::
+                <PG::TwoToOneHash as TwoToOneCRHSchemeGadget<P::TwoToOneHash, _>>::
                 ParametersVar::new_variable(
                     cs.clone(),
                     || Ok(&val.borrow().two_to_one_params),
@@ -78,15 +59,30 @@ impl AllocVar<JZVectorCommitmentParams, ConstraintF> for JZVectorCommitmentParam
     }
 }
 
-pub struct JZVectorCommitmentOpeningProofVar {
-    pub path_var: PathVar<JubJubMerkleTreeParams, Fq, JubJubMerkleTreeParamsVar>,
+pub struct JZVectorCommitmentOpeningProofVar<ConstraintF: Field, P: Config, PG: ConfigGadget<P, ConstraintF>>
+    where   P: Config,
+            ConstraintF: Field,
+            PG: ConfigGadget<P, ConstraintF>,
+            [u8]: std::borrow::Borrow<<P as Config>::Leaf>,
+            PG: ConfigGadget<P, ConstraintF, Leaf = [UInt8<ConstraintF>]>,
+            P: Config<Leaf = [u8]>
+{
+    pub path_var: PathVar<P, ConstraintF, PG>,
+    pub root_var: <PG::TwoToOneHash as TwoToOneCRHSchemeGadget<P::TwoToOneHash, ConstraintF>>::OutputVar,
     pub leaf_var: Vec<UInt8<ConstraintF>>,
-    pub root_var: <LeafHG as CRHSchemeGadget<LeafH, ConstraintF>>::OutputVar,
 }
 
-impl<L: CanonicalSerialize + Clone> 
-    AllocVar<JZVectorCommitmentOpeningProof<L>, ConstraintF> for JZVectorCommitmentOpeningProofVar {
-    fn new_variable<T: Borrow<JZVectorCommitmentOpeningProof<L>>>(
+impl<L, ConstraintF, P, PG> AllocVar<JZVectorCommitmentOpeningProof<P, L>, ConstraintF> for 
+    JZVectorCommitmentOpeningProofVar<ConstraintF, P, PG>
+    where   L: CanonicalSerialize + Clone + Sized,
+            P: Config,
+            ConstraintF: Field,
+            PG: ConfigGadget<P, ConstraintF>,
+            [u8]: std::borrow::Borrow<<P as Config>::Leaf>,
+            P: Config<Leaf = [u8]>,
+            PG: ConfigGadget<P, ConstraintF, Leaf = [UInt8<ConstraintF>]>
+    {
+    fn new_variable<T: Borrow<JZVectorCommitmentOpeningProof<P, L>>>(
         cs: impl Into<Namespace<ConstraintF>>,
         f: impl FnOnce() -> Result<T>,
         mode: AllocationMode
@@ -94,9 +90,10 @@ impl<L: CanonicalSerialize + Clone>
         f().and_then(|val| {
             let cs = cs.into();
             
-            let opening_proof: &JZVectorCommitmentOpeningProof<L> = val.borrow();
+            let opening_proof: &JZVectorCommitmentOpeningProof<P, L> = val.borrow();
 
-            let root_var = <LeafHG as CRHSchemeGadget<LeafH, _>>::OutputVar::new_variable(
+            let root_var = <PG::TwoToOneHash as TwoToOneCRHSchemeGadget<P::TwoToOneHash, _>>::OutputVar
+            ::new_variable(
                 cs.clone(), 
                 || Ok(opening_proof.root.clone()),
                 mode
@@ -119,10 +116,10 @@ impl<L: CanonicalSerialize + Clone>
             )?;
 
             Ok(
-                JZVectorCommitmentOpeningProofVar {
+                JZVectorCommitmentOpeningProofVar::<ConstraintF, P, PG> {
                     path_var,
-                    leaf_var: leaf_byte_vars,
                     root_var,
+                    leaf_var: leaf_byte_vars,
                 }
             )
         })
@@ -130,11 +127,15 @@ impl<L: CanonicalSerialize + Clone>
 }
 
 
-pub fn generate_constraints(
+pub fn generate_constraints<ConstraintF: Field, P: Config, PG: ConfigGadget<P, ConstraintF>>(
     _cs: ConstraintSystemRef<ConstraintF>,
-    params: &JZVectorCommitmentParamsVar,
-    proof: &JZVectorCommitmentOpeningProofVar,
-) {
+    params: &JZVectorCommitmentParamsVar<ConstraintF, P, PG>,
+    proof: &JZVectorCommitmentOpeningProofVar<ConstraintF, P, PG>
+) 
+    where   [u8]: std::borrow::Borrow<<P as Config>::Leaf>,
+            PG: ConfigGadget<P, ConstraintF, Leaf = [UInt8<ConstraintF>]>,
+            P: Config<Leaf = [u8]>
+{
 
     let path_validity = proof.path_var.verify_membership(
         &params.leaf_crh_params_var,
@@ -151,40 +152,56 @@ pub fn generate_constraints(
 mod tests {
     use super::*;
 
-    use ark_std::test_rng;
     use ark_ec::{AffineRepr, CurveGroup};
     use ark_ff::BigInteger256;
-    use ark_bls12_377::*;
+    use rand::SeedableRng;
+
+    type MTEdOnBls12_377 = config::ed_on_bls12_377::MerkleTreeParams;
+    type MTVarEdOnBls12_377 = config::ed_on_bls12_377::MerkleTreeParamsVar;
+
+    type MTEdOnBw6_761 = config::ed_on_bw6_761::MerkleTreeParams;
+    type MTVarEdOnBw6_761 = config::ed_on_bw6_761::MerkleTreeParamsVar;
+
+    fn generate_vc_params<P: crate::merkle_tree::Config>() -> JZVectorCommitmentParams<P> {
+        let seed = [0u8; 32];
+        let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
+        JZVectorCommitmentParams::<P>::trusted_setup(&mut rng)
+    }
 
     #[test]
     fn test_vector_storage_bigint_constraint_gen() {
-        let mut rng = test_rng();
-        let vc_params = JZVectorCommitmentParams::trusted_setup(&mut rng);
-
-        let mut records = Vec::new();
+        
+        let mut records: Vec<BigInteger256> = Vec::new();
         for x in 0..16u8 {
             records.push(BigInteger256::from(x));
         }
 
-        let db = JZVectorDB::<BigInteger256>::new(&vc_params, &records);
+        let db = JZVectorDB::<MTEdOnBls12_377, BigInteger256>::new(
+            generate_vc_params::<MTEdOnBls12_377>(), &records
+        );
         let root = db.commitment();
         let path = db.proof(0);
-        let proof = JZVectorCommitmentOpeningProof {
+        let proof = JZVectorCommitmentOpeningProof::<MTEdOnBls12_377, BigInteger256> {
             root,
             record: records[0].clone(),
             path: path.clone(),
         };
 
+        let vc_params = generate_vc_params::<MTEdOnBls12_377>();
         assert!(verify_proof(&vc_params, &root, &records[0], &path));
 
-        let cs = ConstraintSystem::<ConstraintF>::new_ref();
+        let cs = ConstraintSystem::<ark_bls12_377::Fr>::new_ref();
 
-        let params_var = JZVectorCommitmentParamsVar::new_constant(
+        let params_var = JZVectorCommitmentParamsVar::
+        <ark_bls12_377::Fr, MTEdOnBls12_377, MTVarEdOnBls12_377>
+        ::new_constant(
             cs.clone(),
             &vc_params
         ).unwrap();
 
-        let proof_var = JZVectorCommitmentOpeningProofVar::new_witness(
+        let proof_var = JZVectorCommitmentOpeningProofVar::
+        <ark_bls12_377::Fr, MTEdOnBls12_377, MTVarEdOnBls12_377>
+        ::new_witness(
             cs.clone(),
             || Ok(&proof)
         ).unwrap();
@@ -199,38 +216,43 @@ mod tests {
 
     #[test]
     fn test_vector_storage_g1_constraint_gen() {
-        let mut rng = test_rng();
-        let vc_params = JZVectorCommitmentParams::trusted_setup(&mut rng);
-
         let mut records = Vec::new();
         for x in 0..16u8 {
             let x_bi = BigInteger256::from(x);
-            let g_pow_x_i = G1Affine::generator()
+            let g_pow_x_i = ark_bls12_377::G1Affine::generator()
                 .mul_bigint(x_bi)
                 .into_affine();
             records.push(g_pow_x_i);
         }
 
         let idx = 5;
-        let db = JZVectorDB::<G1Affine>::new(&vc_params, &records);
+        let db = JZVectorDB::<MTEdOnBw6_761, ark_bls12_377::G1Affine>::new(
+            generate_vc_params::<MTEdOnBw6_761>(), &records
+        );
         let root = db.commitment();
         let path = db.proof(idx);
-        let proof = JZVectorCommitmentOpeningProof {
+        let proof = JZVectorCommitmentOpeningProof::<MTEdOnBw6_761, ark_bls12_377::G1Affine> {
             root,
             record: records[idx].clone(),
             path: path.clone(),
         };
 
+        let vc_params = generate_vc_params::<MTEdOnBw6_761>();
+
         assert!(verify_proof(&vc_params, &root, &records[idx], &path));
 
-        let cs = ConstraintSystem::<ConstraintF>::new_ref();
+        let cs = ConstraintSystem::<ark_bw6_761::Fr>::new_ref();
 
-        let params_var = JZVectorCommitmentParamsVar::new_constant(
+        let params_var = JZVectorCommitmentParamsVar::
+        <ark_bw6_761::Fr, MTEdOnBw6_761, MTVarEdOnBw6_761>
+        ::new_constant(
             cs.clone(),
             &vc_params
         ).unwrap();
 
-        let proof_var = JZVectorCommitmentOpeningProofVar::new_witness(
+        let proof_var = JZVectorCommitmentOpeningProofVar::
+        <ark_bw6_761::Fr, MTEdOnBw6_761, MTVarEdOnBw6_761>
+        ::new_witness(
             cs.clone(),
             || Ok(&proof)
         ).unwrap();

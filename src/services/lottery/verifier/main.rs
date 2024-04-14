@@ -18,8 +18,10 @@ use lib_mpc_zexe::collaborative_snark::plonk::*;
 use lib_mpc_zexe::apps;
 use lib_mpc_zexe::protocol as protocol;
 
+type MT = lib_mpc_zexe::vector_commitment::bytes::pedersen::config::ed_on_bw6_761::MerkleTreeParams;
+
 pub struct AppStateType {
-    db: JZVectorDB::<ark_bls12_377::G1Affine>,
+    db: JZVectorDB::<MT, ark_bls12_377::G1Affine>,
     num_coins: usize,
 }
 
@@ -42,7 +44,7 @@ async fn get_merkle_proof(
 
     drop(state);
 
-    let merkle_proof_bs58 = protocol::jubjub_vector_commitment_opening_proof_to_bs58(
+    let merkle_proof_bs58 = protocol::jubjub_vector_commitment_opening_proof_MTEdOnBw6_761_to_bs58(
         &merkle_proof
     );
 
@@ -196,7 +198,7 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
-fn initialize_state() -> JZVectorDB<ark_bls12_377::G1Affine> {
+fn initialize_state() -> JZVectorDB<MT, ark_bls12_377::G1Affine> {
     let (_, vc_params, crs) = protocol::trusted_setup();
     
     let mut records = Vec::new();
@@ -217,5 +219,5 @@ fn initialize_state() -> JZVectorDB<ark_bls12_377::G1Affine> {
         records.push(coin.commitment().into_affine());
     }
 
-    JZVectorDB::<ark_bls12_377::G1Affine>::new(&vc_params, &records)
+    JZVectorDB::<MT, ark_bls12_377::G1Affine>::new(vc_params, &records)
 }

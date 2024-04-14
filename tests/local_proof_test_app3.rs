@@ -14,10 +14,12 @@ use lib_mpc_zexe::record_commitment::kzg::{*, constraints::*};
 use lib_mpc_zexe::{vector_commitment, record_commitment};
 
 pub type ConstraintF = ark_bw6_761::Fr;
+type MT = config::ed_on_bw6_761::MerkleTreeParams;
+type MTVar = config::ed_on_bw6_761::MerkleTreeParamsVar;
 
 pub struct RecordComMerkleCircuit {
     pub record: JZRecord<8>,
-    pub db: JZVectorDB<ark_bls12_377::G1Affine>,
+    pub db: JZVectorDB<MT, ark_bls12_377::G1Affine>,
     pub index: usize,
 }
 
@@ -61,18 +63,23 @@ impl ConstraintSynthesizer<ConstraintF> for RecordComMerkleCircuit {
 
         //--------------- Merkle tree proof ------------------
 
-        let proof = JZVectorCommitmentOpeningProof {
+        let proof = JZVectorCommitmentOpeningProof
+        ::<MT, ark_bls12_377::G1Affine> {
             root: self.db.commitment(),
             record: self.db.get_record(self.index).clone(),
             path: self.db.proof(self.index),
         };
         
-        let params_var = JZVectorCommitmentParamsVar::new_constant(
+        let params_var = JZVectorCommitmentParamsVar
+        ::<ConstraintF, MT, MTVar>
+        ::new_constant(
             cs.clone(),
             &self.db.vc_params
         ).unwrap();
 
-        let proof_var = JZVectorCommitmentOpeningProofVar::new_witness(
+        let proof_var = JZVectorCommitmentOpeningProofVar
+        ::<ConstraintF, MT, MTVar>
+        ::new_witness(
             cs.clone(),
             || Ok(&proof)
         ).unwrap();
@@ -144,7 +151,7 @@ fn setup_witness() -> RecordComMerkleCircuit {
     }
 
     let vc_params = JZVectorCommitmentParams::trusted_setup(&mut rng);
-    let db = JZVectorDB::<ark_bls12_377::G1Affine>::new(&vc_params, &records);
+    let db = JZVectorDB::<MT, ark_bls12_377::G1Affine>::new(vc_params, &records);
     
     RecordComMerkleCircuit {
         //record: JZRecord::<8>::new(&crs, &fields, &blind.to_vec()),

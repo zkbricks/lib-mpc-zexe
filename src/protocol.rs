@@ -32,6 +32,8 @@ type F = ark_bls12_377::Fr;
 type G1Affine = <Curve as Pairing>::G1Affine;
 type ConstraintF = ark_bw6_761::Fr;
 type ConstraintPairing = ark_bw6_761::BW6_761;
+type MTEdOnBls12_377 = crate::vector_commitment::bytes::pedersen::config::ed_on_bls12_377::MerkleTreeParams;
+type MTEdOnBw6_761 = crate::vector_commitment::bytes::pedersen::config::ed_on_bw6_761::MerkleTreeParams;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct VectorCommitmentOpeningProofBs58 {
@@ -42,8 +44,9 @@ pub struct VectorCommitmentOpeningProofBs58 {
     pub root: String
  }
 
- pub fn jubjub_vector_commitment_opening_proof_to_bs58(
-    proof: &JubJubVectorCommitmentOpeningProof<G1Affine>
+ #[allow(non_snake_case)]
+ pub fn jubjub_vector_commitment_opening_proof_MTEdOnBw6_761_to_bs58(
+    proof: &JubJubVectorCommitmentOpeningProof<MTEdOnBw6_761, G1Affine>
  ) -> VectorCommitmentOpeningProofBs58 {
     let mut buffer: Vec<u8> = Vec::new();
     proof.path.leaf_sibling_hash.serialize_compressed(&mut buffer).unwrap();
@@ -74,6 +77,41 @@ pub struct VectorCommitmentOpeningProofBs58 {
         root
     }
 }
+
+#[allow(non_snake_case)]
+pub fn jubjub_vector_commitment_opening_proof_MTEdOnBls12_377_to_bs58(
+    proof: &JubJubVectorCommitmentOpeningProof<MTEdOnBls12_377, G1Affine>
+ ) -> VectorCommitmentOpeningProofBs58 {
+    let mut buffer: Vec<u8> = Vec::new();
+    proof.path.leaf_sibling_hash.serialize_compressed(&mut buffer).unwrap();
+    let path_leaf_sibling_hash = bs58::encode(buffer).into_string();
+
+    let mut path_auth_path = Vec::new();
+    for inner_digest in proof.path.auth_path.iter() {
+        let mut buffer: Vec<u8> = Vec::new();
+        inner_digest.serialize_compressed(&mut buffer).unwrap();
+        let inner_digest_serialized = bs58::encode(buffer).into_string();
+
+        path_auth_path.push(inner_digest_serialized);
+    }
+
+    let mut buffer: Vec<u8> = Vec::new();
+    proof.record.serialize_compressed(&mut buffer).unwrap();
+    let record = bs58::encode(buffer).into_string();
+
+    let mut buffer: Vec<u8> = Vec::new();
+    proof.root.serialize_compressed(&mut buffer).unwrap();
+    let root = bs58::encode(buffer).into_string();
+
+    VectorCommitmentOpeningProofBs58 {
+        path_leaf_sibling_hash,
+        path_auth_path,
+        path_leaf_index: proof.path.leaf_index,
+        record,
+        root
+    }
+}
+
 
  pub fn sha2_vector_commitment_opening_proof_to_bs58(
     proof: &Sha2VectorCommitmentOpeningProof<Vec<u8>>
@@ -140,17 +178,18 @@ pub fn sha2_vector_commitment_opening_proof_from_bs58(
     }
 }
 
-pub fn jubjub_vector_commitment_opening_proof_from_bs58(
+#[allow(non_snake_case)]
+pub fn jubjub_vector_commitment_opening_proof_MTEdOnBw6_761_from_bs58(
     proof: &VectorCommitmentOpeningProofBs58
-) -> JubJubVectorCommitmentOpeningProof<G1Affine> {
+) -> JubJubVectorCommitmentOpeningProof<MTEdOnBw6_761, G1Affine> {
 
     let buf: Vec<u8> = bs58::decode(proof.path_leaf_sibling_hash.clone()).into_vec().unwrap();
-    let leaf_digest = JubJubVectorCommitmentLeafDigest::deserialize_compressed(buf.as_slice()).unwrap();
+    let leaf_digest = JubJubVectorCommitmentLeafDigest::<MTEdOnBw6_761>::deserialize_compressed(buf.as_slice()).unwrap();
 
-    let mut nodes: Vec<JubJubVectorCommitmentInnerDigest> = vec![];
+    let mut nodes: Vec<JubJubVectorCommitmentInnerDigest<MTEdOnBw6_761>> = vec![];
     for node in proof.path_auth_path.iter() {
         let buf: Vec<u8> = bs58::decode(node.clone()).into_vec().unwrap();
-        let node = JubJubVectorCommitmentInnerDigest::deserialize_compressed(buf.as_slice()).unwrap();
+        let node = JubJubVectorCommitmentInnerDigest::<MTEdOnBw6_761>::deserialize_compressed(buf.as_slice()).unwrap();
 
         nodes.push(node);
     }
@@ -159,7 +198,40 @@ pub fn jubjub_vector_commitment_opening_proof_from_bs58(
     let record = G1Affine::deserialize_compressed(buf.as_slice()).unwrap();
 
     let buf: Vec<u8> = bs58::decode(proof.root.clone()).into_vec().unwrap();
-    let root = JubJubVectorCommitment::deserialize_compressed(buf.as_slice()).unwrap();
+    let root = JubJubVectorCommitment::<MTEdOnBw6_761>::deserialize_compressed(buf.as_slice()).unwrap();
+
+    JubJubVectorCommitmentOpeningProof {
+        path: JubJubVectorCommitmentPath {
+            leaf_sibling_hash: leaf_digest,
+            auth_path: nodes,
+            leaf_index: proof.path_leaf_index,
+        },
+        record,
+        root,
+    }
+}
+
+#[allow(non_snake_case)]
+pub fn jubjub_vector_commitment_opening_proof_MTEdOnBls12_377_from_bs58(
+    proof: &VectorCommitmentOpeningProofBs58
+) -> JubJubVectorCommitmentOpeningProof<MTEdOnBls12_377, G1Affine> {
+
+    let buf: Vec<u8> = bs58::decode(proof.path_leaf_sibling_hash.clone()).into_vec().unwrap();
+    let leaf_digest = JubJubVectorCommitmentLeafDigest::<MTEdOnBls12_377>::deserialize_compressed(buf.as_slice()).unwrap();
+
+    let mut nodes: Vec<JubJubVectorCommitmentInnerDigest<MTEdOnBls12_377>> = vec![];
+    for node in proof.path_auth_path.iter() {
+        let buf: Vec<u8> = bs58::decode(node.clone()).into_vec().unwrap();
+        let node = JubJubVectorCommitmentInnerDigest::<MTEdOnBls12_377>::deserialize_compressed(buf.as_slice()).unwrap();
+
+        nodes.push(node);
+    }
+
+    let buf: Vec<u8> = bs58::decode(proof.record.clone()).into_vec().unwrap();
+    let record = G1Affine::deserialize_compressed(buf.as_slice()).unwrap();
+
+    let buf: Vec<u8> = bs58::decode(proof.root.clone()).into_vec().unwrap();
+    let root = JubJubVectorCommitment::<MTEdOnBls12_377>::deserialize_compressed(buf.as_slice()).unwrap();
 
     JubJubVectorCommitmentOpeningProof {
         path: JubJubVectorCommitmentPath {
@@ -512,7 +584,7 @@ fn encode_g1_as_bs58_str(value: &G1Affine) -> String {
     bs58::encode(serialized_msg).into_string()
 }
 
-pub fn trusted_setup() -> (JZPRFParams, JubJubVectorCommitmentParams, JZKZGCommitmentParams<8>) {
+pub fn trusted_setup() -> (JZPRFParams, JubJubVectorCommitmentParams<MTEdOnBw6_761>, JZKZGCommitmentParams<8>) {
     let seed = [0u8; 32];
     let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
 

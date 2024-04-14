@@ -65,6 +65,9 @@ use crate::prf::{*, constraints::*};
 use crate::coin::*;
 
 
+type MTEdOnBw6_761 = config::ed_on_bw6_761::MerkleTreeParams;
+type MTVarEdOnBw6_761 = config::ed_on_bw6_761::MerkleTreeParamsVar;
+    
 // Finite Field used to encode the zk circuit
 type ConstraintF = ark_bw6_761::Fr;
 // Finite Field used to encode the coin data structure
@@ -281,7 +284,7 @@ pub struct SpendCircuit {
     pub prf_params: JZPRFParams,
 
     /// public parameters for the vector commitment scheme
-    pub vc_params: JZVectorCommitmentParams,
+    pub vc_params: JZVectorCommitmentParams<MTEdOnBw6_761>,
 
     /// secret key for proving ownership of the spent coin
     pub sk: [u8; 32],
@@ -299,7 +302,7 @@ pub struct SpendCircuit {
     pub placeholder_refund_coin_record: JZRecord<8>,
 
     /// Merkle opening proof for proving existence of the unspent coin
-    pub unspent_coin_existence_proof: JZVectorCommitmentOpeningProof<ark_bls12_377::G1Affine>,
+    pub unspent_coin_existence_proof: JZVectorCommitmentOpeningProof<MTEdOnBw6_761, ark_bls12_377::G1Affine>,
 }
 
 /// ConstraintSynthesizer is a trait that is implemented for the SpendCircuit;
@@ -516,7 +519,9 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
         // Here, we will prove that the commitment to the spent coin
         // exists in the merkle tree of all created coins
 
-        let proof_var = JZVectorCommitmentOpeningProofVar::new_witness(
+        let proof_var = JZVectorCommitmentOpeningProofVar
+        ::<ConstraintF, MTEdOnBw6_761, MTVarEdOnBw6_761>
+        ::new_witness(
             cs.clone(),
             || Ok(&self.unspent_coin_existence_proof)
         ).unwrap();
@@ -660,7 +665,7 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
 
     // create a circuit with a dummy witness
     let circuit = {
-        let (prf_params, vc_params, crs) = protocol::trusted_setup();
+        let (_prf_params, vc_params, crs) = protocol::trusted_setup();
     
         // let's create the universe of dummy coins
         let mut coins = Vec::new();
@@ -685,13 +690,14 @@ pub fn circuit_setup() -> (ProvingKey<BW6_761>, VerifyingKey<BW6_761>) {
     
         // let's create a database of coins, and generate a merkle proof
         // we need this in order to create a circuit with appropriate public inputs
-        let db = JZVectorDB::<ark_bls12_377::G1Affine>::new(&vc_params, &records);
+        let db = JZVectorDB::<MTEdOnBw6_761, ark_bls12_377::G1Affine>::new(vc_params, &records);
         let merkle_proof = JZVectorCommitmentOpeningProof {
             root: db.commitment(),
             record: db.get_record(0).clone(),
             path: db.proof(0),
         };
 
+        let (prf_params, vc_params, crs) = protocol::trusted_setup();
         // note that circuit setup does not care about the values of witness variables
         SpendCircuit {
             crs: crs,
@@ -722,7 +728,7 @@ pub fn generate_groth_proof(
     app_input_coin: &JZRecord<8>,
     placeholder_output_coin: &JZRecord<8>,
     placeholder_refund_coin: &JZRecord<8>,
-    unspent_coin_existence_proof: &JZVectorCommitmentOpeningProof<ark_bls12_377::G1Affine>,
+    unspent_coin_existence_proof: &JZVectorCommitmentOpeningProof<MTEdOnBw6_761, ark_bls12_377::G1Affine>,
     sk: &[u8; 32]
 ) -> (Proof<BW6_761>, Vec<ConstraintF>) {
 

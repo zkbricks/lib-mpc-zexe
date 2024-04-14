@@ -1,26 +1,26 @@
-pub mod common;
 pub mod constraints;
+pub mod config;
 
-use common::*;
+use crate::merkle_tree::*;
 
 use std::marker::PhantomData;
+use ark_std::convert::*;
 
 use ark_crypto_primitives::{crh::*, to_uncompressed_bytes};
-use crate::merkle_tree::*;
 use ark_std::rand::Rng;
 use ark_serialize::CanonicalSerialize;
 use ark_std::borrow::*;
 
-#[derive(Clone)]
-pub struct JZVectorCommitmentParams {
-    pub leaf_crh_params: <LeafH as CRHScheme>::Parameters,
-    pub two_to_one_params: <CompressH as TwoToOneCRHScheme>::Parameters,
+pub struct JZVectorCommitmentParams<P: Config> 
+{
+    pub leaf_crh_params: <P::LeafHash as CRHScheme>::Parameters,
+    pub two_to_one_params: <P::TwoToOneHash as TwoToOneCRHScheme>::Parameters,
 }
 
-impl JZVectorCommitmentParams {
+impl<P: Config> JZVectorCommitmentParams<P> {
     pub fn trusted_setup<R: Rng>(rng: &mut R) -> Self {
-        let leaf_crh_params = <LeafH as CRHScheme>::setup(rng).unwrap();
-        let two_to_one_params = <CompressH as TwoToOneCRHScheme>::setup(rng)
+        let leaf_crh_params = <P::LeafHash as CRHScheme>::setup(rng).unwrap();
+        let two_to_one_params = <P::TwoToOneHash as TwoToOneCRHScheme>::setup(rng)
             .unwrap()
             .clone();
 
@@ -31,47 +31,53 @@ impl JZVectorCommitmentParams {
     }
 }
 
-type JubJubMerkleTree = MerkleTree<JubJubMerkleTreeParams>;
+pub type JZVectorCommitment<P: Config> = P::InnerDigest;
+pub type JZVectorCommitmentPath<P: Config> = Path<P>;
+pub type JZVectorCommitmentLeafDigest<P: Config> = P::LeafDigest;
+pub type JZVectorCommitmentInnerDigest<P: Config> = P::InnerDigest;
 
-pub type JZVectorCommitmentPath = Path<JubJubMerkleTreeParams>;
-pub type JZVectorCommitmentLeafDigest = 
-    <JubJubMerkleTreeParams as crate::merkle_tree::Config>
-    ::LeafDigest;
-pub type JZVectorCommitmentInnerDigest = 
-    <JubJubMerkleTreeParams as crate::merkle_tree::Config>
-    ::InnerDigest;
-
-pub type JZVectorCommitment = 
-    <JubJubMerkleTreeParams as crate::merkle_tree::Config>
-    ::InnerDigest;
-
-pub struct JZVectorDB<L: CanonicalSerialize + Clone> {
-    pub vc_params: JZVectorCommitmentParams,
-    tree: JubJubMerkleTree,
+pub struct JZVectorDB<P, L> 
+    where   P: Config,
+            L: CanonicalSerialize + Clone + Sized,
+            [u8]: std::borrow::Borrow<<P as Config>::Leaf>,
+            P: Config<Leaf = [u8]>
+{
+    pub vc_params: JZVectorCommitmentParams<P>,
+    tree: MerkleTree<P>,
     records: Vec<L>,
     marker: PhantomData<L>
 }
 
 #[derive(Clone)]
-pub struct JZVectorCommitmentOpeningProof<L: CanonicalSerialize + Clone> {
-    pub path: Path<JubJubMerkleTreeParams>,
+pub struct JZVectorCommitmentOpeningProof<P, L>
+    where   P: Config,
+            L: CanonicalSerialize + Clone + Sized,
+            [u8]: std::borrow::Borrow<<P as Config>::Leaf>,
+            P: Config<Leaf = [u8]>
+{
+    pub path: Path<P>,
     pub record: L,
-    pub root: JZVectorCommitment
+    pub root: JZVectorCommitment<P>
 }
 
-impl<L: CanonicalSerialize + Clone> JZVectorDB<L> {
+impl<P, L> JZVectorDB<P, L> 
+    where   P: Config,
+            L: CanonicalSerialize + Clone + Sized,
+            [u8]: std::borrow::Borrow<<P as Config>::Leaf>,
+            P: Config<Leaf = [u8]>
+{
 
     pub fn new(
-        params: &JZVectorCommitmentParams,
+        params: JZVectorCommitmentParams<P>,
         records: &[L]
     ) -> Self {
 
-        let leaves: Vec<_> = records
+        let leaves: Vec<Vec<u8>> = records
             .iter()
             .map(|leaf| to_uncompressed_bytes!(leaf).unwrap())
             .collect();
 
-        let tree = JubJubMerkleTree::new(
+        let tree = MerkleTree::<P>::new(
             &params.leaf_crh_params.clone(),
             &params.two_to_one_params.clone(),
             leaves.iter().map(|x| x.as_slice()),
@@ -84,17 +90,17 @@ impl<L: CanonicalSerialize + Clone> JZVectorDB<L> {
         for (i, leaf) in leaves.iter().enumerate() {
             let proof = tree.generate_proof(i).unwrap();
             assert!(proof
-                .verify(
+                .verify::<Vec<u8>>(
                     &params.leaf_crh_params,
                     &params.two_to_one_params,
                     &root,
-                    leaf.as_slice()
+                    leaf.as_slice().to_owned()
                 ).unwrap()
             );
         }
         
-        JZVectorDB {
-            vc_params: params.clone(),
+        JZVectorDB::<P,L> {
+            vc_params: params,
             tree,
             records: records.to_vec(),
             marker: PhantomData
@@ -119,11 +125,11 @@ impl<L: CanonicalSerialize + Clone> JZVectorDB<L> {
         self.tree.update(index, &new_leaf).unwrap();
     }
 
-    pub fn commitment(&self) -> JZVectorCommitment {
+    pub fn commitment(&self) -> JZVectorCommitment<P> {
         self.tree.root()
     }
 
-    pub fn proof(&self, index: usize) -> Path<JubJubMerkleTreeParams> {
+    pub fn proof(&self, index: usize) -> Path<P> {
         if index >= self.records.len() {
             panic!("Index out of bounds");
         }
@@ -133,18 +139,24 @@ impl<L: CanonicalSerialize + Clone> JZVectorDB<L> {
 
 }
 
-pub fn verify_proof<L: CanonicalSerialize>(
-    params: &JZVectorCommitmentParams,
-    commitment: &JZVectorCommitment,
+pub fn verify_proof<P, L>
+(
+    params: &JZVectorCommitmentParams<P>,
+    commitment: &JZVectorCommitment<P>,
     record: &L,
-    proof: &Path<JubJubMerkleTreeParams>
-) -> bool {
+    proof: &Path<P>
+) -> bool 
+    where   P: Config,
+            L: CanonicalSerialize + Clone + Sized,
+            [u8]: std::borrow::Borrow<<P as Config>::Leaf>,
+            P: Config<Leaf = [u8]>
+{
     let leaf = to_uncompressed_bytes!(record).unwrap();
     proof.verify(
         &params.leaf_crh_params,
         &params.two_to_one_params,
         commitment,
-        leaf.as_slice()
+        leaf
     ).unwrap()
 }
 
@@ -153,37 +165,43 @@ mod tests {
     use super::*;
 
     use ark_ec::{AffineRepr, CurveGroup};
-    use ark_std::test_rng;
     use ark_ff::BigInteger256;
     use ark_bls12_377::*;
+    use rand::SeedableRng;
+
+    type MT = config::ed_on_bw6_761::MerkleTreeParams;
+
+    fn generate_vc_params<P: crate::merkle_tree::Config>() -> JZVectorCommitmentParams<P> {
+        let seed = [0u8; 32];
+        let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
+        JZVectorCommitmentParams::<P>::trusted_setup(&mut rng)
+    }
 
     #[test]
     fn test_vector_storage_bigint() {
-        let mut rng = test_rng();
-        let vc_params = JZVectorCommitmentParams::trusted_setup(&mut rng);
 
         let mut records = Vec::new();
         for x in 0..16u8 {
             records.push(BigInteger256::from(x));
         }
 
-        let mut db = JZVectorDB::<BigInteger256>::new(&vc_params, &records);
+        let mut db = JZVectorDB::<MT, BigInteger256>::new(
+            generate_vc_params::<MT>(), &records
+        );
         
         let com = db.commitment();
         let proof = db.proof(0);
-        assert!(verify_proof(&vc_params, &com, &records[0], &proof));
+        assert!(verify_proof(&generate_vc_params::<MT>(), &com, &records[0], &proof));
 
         let updated_record = BigInteger256::from(42u8);
         db.update(1, &updated_record);
         let com = db.commitment();
         let proof = db.proof(1);
-        assert!(verify_proof(&vc_params, &com, &updated_record, &proof));
+        assert!(verify_proof(&generate_vc_params::<MT>(), &com, &updated_record, &proof));
     }
 
     #[test]
     fn test_vector_storage_g1() {
-        let mut rng = test_rng();
-        let vc_params = JZVectorCommitmentParams::trusted_setup(&mut rng);
 
         let mut records = Vec::new();
         // record i is g^i
@@ -195,11 +213,11 @@ mod tests {
             records.push(g_pow_x_i);
         }
 
-        let db = JZVectorDB::<G1Affine>::new(&vc_params, &records);
+        let db = JZVectorDB::<MT, G1Affine>::new(generate_vc_params::<MT>(), &records);
 
         let com = db.commitment();
         let some_index = 5; //anything between 0 and 16
         let proof = db.proof(some_index);
-        assert!(verify_proof(&vc_params, &com, &records[some_index], &proof));
+        assert!(verify_proof(&generate_vc_params::<MT>(), &com, &records[some_index], &proof));
     }
 }
