@@ -15,7 +15,6 @@ use lib_mpc_zexe::record_commitment::kzg::*;
 use lib_mpc_zexe::protocol as protocol;
 
 type MT = lib_mpc_zexe::vector_commitment::bytes::pedersen::config::ed_on_bw6_761::MerkleTreeParams;
-type MTVar = lib_mpc_zexe::vector_commitment::bytes::pedersen::config::ed_on_bw6_761::MerkleTreeParamsVar;
 
 async fn get_merkle_proof(index: usize)
 -> reqwest::Result<JZVectorCommitmentOpeningProof<MT, ark_bls12_377::G1Affine>> {

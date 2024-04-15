@@ -31,10 +31,10 @@ impl<P: Config> JZVectorCommitmentParams<P> {
     }
 }
 
-pub type JZVectorCommitment<P: Config> = P::InnerDigest;
-pub type JZVectorCommitmentPath<P: Config> = Path<P>;
-pub type JZVectorCommitmentLeafDigest<P: Config> = P::LeafDigest;
-pub type JZVectorCommitmentInnerDigest<P: Config> = P::InnerDigest;
+pub type JZVectorCommitment<P> = <P as Config>::InnerDigest;
+pub type JZVectorCommitmentPath<P> = Path<P>;
+pub type JZVectorCommitmentLeafDigest<P> = <P as Config>::LeafDigest;
+pub type JZVectorCommitmentInnerDigest<P> = <P as Config>::InnerDigest;
 
 pub struct JZVectorDB<P, L> 
     where   P: Config,
