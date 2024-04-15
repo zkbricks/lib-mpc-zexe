@@ -7,38 +7,6 @@ edition = "2021"
 name = "lib_mpc_zexe"
 path = "src/lib.rs"
 
-[[bin]]
-name = "lottery_matchmaker"
-path = "src/services/lottery/matchmaker/main.rs"
-
-[[bin]]
-name = "lottery_prover"
-path = "src/services/lottery/prover/main.rs"
-
-[[bin]]
-name = "lottery_verifier"
-path = "src/services/lottery/verifier/main.rs"
-
-[[bin]]
-name = "lottery_client"
-path = "src/services/lottery/client/main.rs"
-
-[[bin]]
-name = "swap_matchmaker"
-path = "src/services/swap/matchmaker/main.rs"
-
-[[bin]]
-name = "swap_prover"
-path = "src/services/swap/prover/main.rs"
-
-[[bin]]
-name = "swap_verifier"
-path = "src/services/swap/verifier/main.rs"
-
-[[bin]]
-name = "swap_client"
-path = "src/services/swap/client/main.rs"
-
 
 [profile.test]
 opt-level = 3

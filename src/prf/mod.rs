@@ -76,11 +76,17 @@ impl JZPRFInstance {
 
 #[cfg(test)]
 mod tests {
-    use crate::{prf::*, protocol};
+    use crate::prf::*;
+    use rand::SeedableRng;
 
     #[test]
     fn test_jzprf() {
-        let (prf_params, _, _) = protocol::trusted_setup();
+        let seed = [0u8; 32];
+        let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
+
+        // TODO: for now we sample the public parameters directly;
+        // we should change this to load from a file produced by a trusted setup
+        let prf_params = JZPRFParams::trusted_setup(&mut rng);
         
         let input = [0u8; 32];
         let key = [25u8; 32];
