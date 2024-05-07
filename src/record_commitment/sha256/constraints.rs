@@ -8,15 +8,16 @@ use ark_crypto_primitives::crh::sha256::{*, constraints::*};
 
 use super::JZRecord;
 
-type ConstraintF = ark_bls12_377::Fq;
-
-pub struct JZRecordVar<const N: usize> {
+pub struct JZRecordVar<const N: usize, ConstraintF>
+    where ConstraintF: PrimeField
+{
     pub fields: [Vec<UInt8<ConstraintF>>; N],
     pub commitment: DigestVar<ConstraintF>,
 }
 
-impl<const N: usize> AllocVar<JZRecord<N>, ConstraintF> for JZRecordVar<N> {
-    fn new_variable<T: Borrow<JZRecord<N>>>(
+impl<const N: usize, const M: usize, RecordF: PrimeField + std::convert::From<BigInt<M>>, ConstraintF: PrimeField>
+AllocVar<JZRecord<N, M, RecordF>, ConstraintF> for JZRecordVar<N, ConstraintF> {
+    fn new_variable<T: Borrow<JZRecord<N, M, RecordF>>>(
         cs: impl Into<Namespace<ConstraintF>>,
         f: impl FnOnce() -> Result<T>,
         mode: AllocationMode
@@ -83,9 +84,9 @@ impl<const N: usize> AllocVar<JZRecord<N>, ConstraintF> for JZRecordVar<N> {
     }
 }
 
-pub fn generate_constraints<const N: usize>(
+pub fn generate_constraints<const N: usize, ConstraintF: PrimeField>(
     _cs: ConstraintSystemRef<ConstraintF>,
-    record: &JZRecordVar<N>
+    record: &JZRecordVar<N, ConstraintF>
 ) -> Result<()> {
 
     let all_byte_vars: Vec<UInt8<ConstraintF>> = record.fields
@@ -117,10 +118,10 @@ mod tests {
 
         let records: [Vec<u8>; 4] = [vec![20u8; 31], vec![244u8; 31], vec![244u8; 31], vec![244u8; 31]];
 
-        let coin = JZRecord::<4>::new(&records, &entropy.to_vec());
+        let coin = JZRecord::<4, 4, ark_bls12_377::Fr>::new(&records, &entropy.to_vec());
 
-        let cs = ConstraintSystem::<ConstraintF>::new_ref();
-        let coin_var = JZRecordVar::<4>::new_witness(cs.clone(), || Ok(coin)).unwrap();
+        let cs = ConstraintSystem::<ark_bw6_761::Fr>::new_ref();
+        let coin_var = JZRecordVar::<4, ark_bw6_761::Fr>::new_witness(cs.clone(), || Ok(coin)).unwrap();
 
         generate_constraints(cs.clone(), &coin_var).unwrap();
         assert!(cs.is_satisfied().unwrap(), "constraints not satisfied");

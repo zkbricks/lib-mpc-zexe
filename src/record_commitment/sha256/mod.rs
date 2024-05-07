@@ -1,20 +1,11 @@
 pub mod constraints;
 
-use ark_crypto_primitives::crh::CRHScheme;
-use ark_std::*;
-use ark_std::borrow::*;
-
-use ark_crypto_primitives::crh::sha256::*;
+use ark_crypto_primitives::crh::{CRHScheme, sha256::*};
+use ark_std::{*, borrow::*};
+use ark_ff::*;
+use ark_std::marker::PhantomData;
 
 use crate::utils;
-
-type F = ark_bls12_377::Fr;
-
-#[derive(Clone)]
-pub struct JZRecord<const N: usize> {
-    pub fields: [Vec<u8>; N], //Nth field is the entropy
-    pub blind: Vec<u8> //in case we want to reveal a blinded commitment
-}
 
 fn hash_of_fields(fields: &[Vec<u8>]) -> Vec<u8> {
     let mut concatenated = Vec::new();
@@ -25,7 +16,14 @@ fn hash_of_fields(fields: &[Vec<u8>]) -> Vec<u8> {
     Sha256::evaluate(&(), concatenated).unwrap()
 }
 
-impl<const N: usize> JZRecord<N> {
+#[derive(Clone)]
+pub struct JZRecord<const N: usize, const M: usize, RecordF: PrimeField + std::convert::From<BigInt<M>>> {
+    pub fields: [Vec<u8>; N], //Nth field is the entropy
+    pub blind: Vec<u8>, //in case we want to reveal a blinded commitment
+    pub _phantom: PhantomData<RecordF>
+}
+
+impl<const N: usize, const M: usize, RecordF: PrimeField + std::convert::From<BigInt<M>>> JZRecord<N, M, RecordF> {
     pub fn new(
         fields: &[Vec<u8>; N],
         blind: &Vec<u8>
@@ -34,9 +32,10 @@ impl<const N: usize> JZRecord<N> {
             fields[0].len() == blind.len(), 
             "Blind and entropy field (index 0) must have the same length"
         );
-        JZRecord {
+        JZRecord::<N, M, RecordF> {
             fields: fields.to_owned(),
-            blind: blind.to_owned()
+            blind: blind.to_owned(),
+            _phantom: PhantomData
         }
     }
 
@@ -58,18 +57,18 @@ impl<const N: usize> JZRecord<N> {
         hash_of_fields(&new_fields)
     }
 
-    pub fn fields(&self) -> [F; N] {
+    pub fn fields(&self) -> [RecordF; N] {
         self.fields
             .iter()
-            .map(|field| utils::bytes_to_field(field))
-            .collect::<Vec<F>>()
+            .map(|field| utils::bytes_to_field::<RecordF, M>(field))
+            .collect::<Vec<RecordF>>()
             .try_into()
             .unwrap()
     }
 
-    pub fn blinded_fields(&self) -> [F; N] {
+    pub fn blinded_fields(&self) -> [RecordF; N] {
         let mut fields = self.fields();
-        fields[0] += utils::bytes_to_field::<F, 4>(&self.blind);
+        fields[0] += utils::bytes_to_field::<RecordF, M>(&self.blind);
         fields
     }
 }
