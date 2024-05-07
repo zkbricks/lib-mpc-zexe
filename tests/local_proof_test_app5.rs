@@ -21,7 +21,7 @@ type MTVar = config::ed_on_bw6_761::MerkleTreeParamsVar;
 
 pub struct SpendCircuit {
     pub prf_instance: JZPRFInstance,
-    pub record: JZRecord<8>,
+    pub record: JZRecord<8, 4, ark_bls12_377::Config>,
     pub db: JZVectorDB<MT, ark_bls12_377::G1Affine>,
     pub index: usize,
 }
@@ -50,12 +50,12 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
 
         //--------------- KZG proof ------------------
 
-        let crs_var = JZKZGCommitmentParamsVar::<8>::new_constant(
+        let crs_var = JZKZGCommitmentParamsVar::<8, ark_bls12_377::Config>::new_constant(
             cs.clone(),
             self.record.crs.clone()
         ).unwrap();
         
-        let coin_var = JZRecordVar::<8>::new_witness(
+        let coin_var = JZRecordVar::<8, ark_bls12_377::Config, ark_bls12_377::Fq>::new_witness(
             cs.clone(),
             || Ok(self.record.borrow())
         ).unwrap();
@@ -154,7 +154,7 @@ fn setup_witness() -> SpendCircuit {
     let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
 
     let prf_params = JZPRFParams::trusted_setup(&mut rng);
-    let crs = JZKZGCommitmentParams::<8>::trusted_setup(&mut rng);
+    let crs = JZKZGCommitmentParams::<8, 4, ark_bls12_377::Config>::trusted_setup(&mut rng);
 
     let mut entropy = [0u8; 24];
     rng.fill_bytes(&mut entropy);
@@ -180,7 +180,7 @@ fn setup_witness() -> SpendCircuit {
             vec![0u8],
         ];
 
-        let coin = JZRecord::<8>::new(&crs, &fields, &blind.to_vec());
+        let coin = JZRecord::<8, 4, ark_bls12_377::Config>::new(&crs, &fields, &blind.to_vec());
         records.push(coin.commitment().into_affine());
         coins.push(coin);
     }

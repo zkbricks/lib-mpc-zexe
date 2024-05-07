@@ -1,33 +1,40 @@
 pub mod constraints;
 
 use ark_ec::*;
-use ark_ff::*;
 use ark_std::{*, rand::Rng};
 use ark_std::borrow::*;
-use ark_ff::{Field, PrimeField, BigInt, BigInteger};
+use ark_std::convert::*;
+use ark_ff::*;
 use ark_poly::Polynomial;
-use ark_bls12_377::{G1Projective, G2Projective};
+use ark_ec::models::bls12::*;
 
 use crate::utils;
 
-type F = ark_bls12_377::Fr;
-
-#[derive(Clone)]
-pub struct JZKZGCommitmentParams<const N: usize> {
+//#[derive(Clone)]
+#[derive(Derivative)]
+#[derivative(Clone(bound = "C: Bls12Config"))]
+pub struct JZKZGCommitmentParams<const N: usize, const M: usize, C: Bls12Config> 
+    where <<C as Bls12Config>::G1Config as CurveConfig>::ScalarField: std::convert::From<BigInt<M>>
+{
     /// KZG CRS in the coefficient basis
-    pub crs_coefficient_g1: Vec<ark_bls12_377::G1Projective>,
+    pub crs_coefficient_g1: Vec<G1Projective<C>>,
     /// KZG CRS in the coefficient basis
-    pub crs_coefficient_g2: Vec<ark_bls12_377::G2Projective>,
+    pub crs_coefficient_g2: Vec<G2Projective<C>>,
     /// KZG CRS in the Lagrange basis
-    pub crs_lagrange: Vec<ark_bls12_377::G1Projective>,
+    pub crs_lagrange: Vec<G1Projective<C>>,
 }
 
-impl<const N: usize> JZKZGCommitmentParams<N> {
-    pub fn trusted_setup<R: Rng>(_rng: &mut R) -> Self {
-        let tau = F::from(42);
+type ScalarField<P> = <<P as Bls12Config>::G1Config as CurveConfig>::ScalarField;
 
-        let g = G1Projective::generator();
-        let h = G2Projective::generator();
+impl<const N: usize, const M: usize, C: Bls12Config> JZKZGCommitmentParams<N, M, C>
+    where <<C as Bls12Config>::G1Config as CurveConfig>::ScalarField: std::convert::From<BigInt<M>>,
+{
+
+    pub fn trusted_setup<R: Rng>(_rng: &mut R) -> Self {  
+        let tau: ScalarField<C> = ScalarField::<C>::from(BigInt::<M>::from(42 as u32));
+
+        let g = G1Projective::<C>::generator();
+        let h = G2Projective::<C>::generator();
 
         let crs_coefficient_g1 = (0..4*N)
             .map(|i| g.mul_bigint(
@@ -53,40 +60,42 @@ impl<const N: usize> JZKZGCommitmentParams<N> {
                 ))
             .collect();
 
-        JZKZGCommitmentParams {
-            crs_coefficient_g1: crs_coefficient_g1,
-            crs_coefficient_g2: crs_coefficient_g2,
-            crs_lagrange,
-        }
+        JZKZGCommitmentParams { crs_coefficient_g1, crs_coefficient_g2, crs_lagrange }
     }
 }
 
-#[derive(Clone)]
-pub struct JZRecord<const N: usize> {
-    pub crs: JZKZGCommitmentParams<N>,
+/// JZRecord<N,M,C> where N is the number of fields and M is the size of each field (in u64s)
+#[derive(Derivative)]
+#[derivative(Clone(bound = "C: Bls12Config"))]
+pub struct JZRecord<const N: usize, const M: usize, C: Bls12Config>
+    where <<C as Bls12Config>::G1Config as CurveConfig>::ScalarField: std::convert::From<BigInt<M>>
+{
+    pub crs: JZKZGCommitmentParams<N, M, C>,
     pub fields: [Vec<u8>; N], //Nth field is the entropy
-    pub blind: Vec<u8> //in case we want to reveal a blinded commitment
+    pub blind: Vec<u8>, //in case we want to reveal a blinded commitment
 }
 
-impl<const N: usize> JZRecord<N> {
+impl<const N: usize, const M: usize, C: Bls12Config> JZRecord<N, M, C>
+    where <<C as Bls12Config>::G1Config as CurveConfig>::ScalarField: std::convert::From<BigInt<M>>
+{
     pub fn new(
-        crs: &JZKZGCommitmentParams<N>,
+        crs: &JZKZGCommitmentParams<N, M, C>,
         fields: &[Vec<u8>; N],
         blind: &Vec<u8>
     ) -> Self {
         JZRecord {
-            crs: crs.clone(),
+            crs: (*crs).clone(),
             fields: fields.to_owned(),
-            blind: blind.to_owned()
+            blind: blind.to_owned(),
         }
     }
 
-    pub fn commitment(&self) -> ark_bls12_377::G1Projective {
-        let mut acc = ark_bls12_377::G1Projective::zero();
+    pub fn commitment(&self) -> G1Projective<C> {
+        let mut acc = G1Projective::<C>::zero();
         for (i, field) in self.fields.iter().enumerate() {
             if i < N {
                 let crs_elem = self.crs.crs_lagrange[i];
-                let exp = BigInt::<4>::from_bits_le(
+                let exp = BigInt::<M>::from_bits_le(
                     utils::bytes_to_bits(&field).as_slice()
                 );
                 
@@ -96,10 +105,10 @@ impl<const N: usize> JZRecord<N> {
         acc
     }
 
-    pub fn blinded_commitment(&self) -> ark_bls12_377::G1Projective {
+    pub fn blinded_commitment(&self) -> G1Projective<C> {
         let com = self.commitment();
 
-        let blind_bi = BigInt::<4>::from_bits_le(
+        let blind_bi = BigInt::<M>::from_bits_le(
             utils::bytes_to_bits(&self.blind).as_slice()
         );
         let blind_group_elem = self.crs
@@ -110,11 +119,11 @@ impl<const N: usize> JZRecord<N> {
         com + blind_group_elem
     }
 
-    pub fn fields(&self) -> [F; N] {
-        let mut fields = [F::zero(); N];
+    pub fn fields(&self) -> [ScalarField<C>; N] {
+        let mut fields = [ScalarField::<C>::zero(); N];
         for (i, field) in self.fields.iter().enumerate() {
-            fields[i] = F::from(
-                BigInt::<4>::from_bits_le(
+            fields[i] = ScalarField::<C>::from(
+                BigInt::<M>::from_bits_le(
                     utils::bytes_to_bits(&field).as_slice()
                 )
             );
@@ -122,12 +131,12 @@ impl<const N: usize> JZRecord<N> {
         fields
     }
 
-    pub fn blinded_fields(&self) -> [F; N] {
+    pub fn blinded_fields(&self) -> [ScalarField<C>; N] {
         let mut fields = self.fields();
 
         // convert blind to a field element
-        let blind = F::from(
-            BigInt::<4>::from_bits_le(
+        let blind = ScalarField::<C>::from(
+            BigInt::<M>::from_bits_le(
                 utils::bytes_to_bits(&self.blind).as_slice()
             )
         );

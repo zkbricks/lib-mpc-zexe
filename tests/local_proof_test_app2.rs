@@ -16,7 +16,7 @@ use lib_mpc_zexe::record_commitment;
 pub type ConstraintF = ark_bw6_761::Fr;
 
 pub struct RecordComCircuit {
-    pub record: JZRecord<4>,
+    pub record: JZRecord<4, 4, ark_bls12_377::Config>,
 }
 
 impl ConstraintSynthesizer<ConstraintF> for RecordComCircuit {
@@ -25,8 +25,8 @@ impl ConstraintSynthesizer<ConstraintF> for RecordComCircuit {
         self,
         cs: ConstraintSystemRef<ConstraintF>,
     ) -> Result<()> {
-        let crs_var = JZKZGCommitmentParamsVar::<4>::new_constant(cs.clone(), self.record.crs.clone()).unwrap();
-        let coin_var = JZRecordVar::<4>::new_witness(cs.clone(), || Ok(self.record.borrow())).unwrap();
+        let crs_var = JZKZGCommitmentParamsVar::<4, ark_bls12_377::Config>::new_constant(cs.clone(), self.record.crs.clone()).unwrap();
+        let coin_var = JZRecordVar::<4, ark_bls12_377::Config, ark_bw6_761::Fr>::new_witness(cs.clone(), || Ok(self.record.borrow())).unwrap();
 
         let record = self.record.borrow();
         let computed_com = record.commitment().into_affine();
@@ -62,7 +62,7 @@ fn setup_witness() -> RecordComCircuit {
     let seed = [0u8; 32];
     let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
 
-    let crs = JZKZGCommitmentParams::<4>::trusted_setup(&mut rng);
+    let crs = JZKZGCommitmentParams::<4, 4, ark_bls12_377::Config>::trusted_setup(&mut rng);
 
     let mut blind = [0u8; 24];
     rng.fill_bytes(&mut blind);
@@ -76,7 +76,7 @@ fn setup_witness() -> RecordComCircuit {
     ];
     
     RecordComCircuit {
-        record: JZRecord::<4>::new(&crs, &records, &blind.to_vec()),
+        record: JZRecord::<4, 4, ark_bls12_377::Config>::new(&crs, &records, &blind.to_vec()),
     }
 }
 
