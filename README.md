@@ -1,3 +1,5 @@
+![example workflow](https://github.com/github/docs/actions/workflows/main.yml/badge.svg)
+
 ##  Overview
 
 Cryptography primitives and their R1CS circuit builders for building privacy-preserving apps, such as payments and swaps.
