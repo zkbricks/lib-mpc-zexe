@@ -9,10 +9,10 @@ use ark_relations::r1cs::*;
 use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
 use ark_snark::SNARK;
 
-use lib_mpc_zexe::{vector_commitment, record_commitment, prf};
-use lib_mpc_zexe::vector_commitment::bytes::pedersen::{*, constraints::*};
-use lib_mpc_zexe::record_commitment::kzg::{*, constraints::*};
-use lib_mpc_zexe::prf::{*, constraints::*};
+use lib_sanctum::{vector_commitment, record_commitment, prf};
+use lib_sanctum::vector_commitment::bytes::pedersen::{*, constraints::*};
+use lib_sanctum::record_commitment::kzg::{*, constraints::*};
+use lib_sanctum::prf::{*, constraints::*};
 
 pub const OWNER: usize = 1;
 
