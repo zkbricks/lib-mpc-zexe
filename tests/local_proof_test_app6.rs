@@ -14,7 +14,9 @@ use lib_mpc_zexe::{vector_commitment, record_commitment, prf};
 use lib_mpc_zexe::vector_commitment::bytes::pedersen::{*, constraints::*};
 use lib_mpc_zexe::record_commitment::kzg::{*, constraints::*};
 use lib_mpc_zexe::prf::{*, constraints::*};
-use lib_mpc_zexe::coin::*;
+
+pub const OWNER: usize = 1;
+pub const RHO: usize = 7;
 
 pub type ConstraintF = ark_bw6_761::Fr;
 type MT = vector_commitment::bytes::pedersen::config::ed_on_bw6_761::MerkleTreeParams;
