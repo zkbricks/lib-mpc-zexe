@@ -16,11 +16,13 @@ use lib_mpc_zexe::prf::{*, constraints::*};
 use lib_mpc_zexe::coin::*;
 
 pub type ConstraintF = ark_bw6_761::Fr;
-type MT = config::ed_on_bw6_761::MerkleTreeParams;
-type MTVar = config::ed_on_bw6_761::MerkleTreeParamsVar;
+type MT = vector_commitment::bytes::pedersen::config::ed_on_bw6_761::MerkleTreeParams;
+type MTVar = vector_commitment::bytes::pedersen::config::ed_on_bw6_761::MerkleTreeParamsVar;
+pub type H = prf::config::ed_on_bw6_761::Hash;
+pub type HG = prf::config::ed_on_bw6_761::HashGadget;
 
 pub struct SpendCircuit {
-    pub prf_instance: JZPRFInstance,
+    pub prf_instance: JZPRFInstance<H>,
     pub record: JZRecord<8, 4, ark_bls12_377::Config>,
     pub db: JZVectorDB<MT, ark_bls12_377::G1Affine>,
     pub index: usize,
@@ -34,12 +36,12 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
     ) -> Result<()> {
 
         //--------------- Private key ------------------
-        let params_var = JZPRFParamsVar::new_constant(
+        let params_var = JZPRFParamsVar::<H, HG, ConstraintF>::new_constant(
             cs.clone(),
             &self.prf_instance.params
         ).unwrap();
 
-        let prf_instance_var = JZPRFInstanceVar::new_witness(
+        let prf_instance_var = JZPRFInstanceVar::<ConstraintF>::new_witness(
             cs.clone(),
             || Ok(self.prf_instance)
         ).unwrap();
@@ -153,7 +155,7 @@ fn setup_witness() -> SpendCircuit {
     let seed = [0u8; 32];
     let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
 
-    let prf_params = JZPRFParams::trusted_setup(&mut rng);
+    let prf_params = JZPRFParams::<H>::trusted_setup(&mut rng);
     let crs = JZKZGCommitmentParams::<8, 4, ark_bls12_377::Config>::trusted_setup(&mut rng);
 
     let mut entropy = [0u8; 24];

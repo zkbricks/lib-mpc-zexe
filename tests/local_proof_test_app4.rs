@@ -9,9 +9,11 @@ use lib_mpc_zexe::prf::{*, constraints::*};
 use lib_mpc_zexe::prf;
 
 pub type ConstraintF = ark_bw6_761::Fr;
+pub type H = prf::config::ed_on_bw6_761::Hash;
+pub type HG = prf::config::ed_on_bw6_761::HashGadget;
 
 pub struct PRFCircuit {
-    pub prf_instance: JZPRFInstance,
+    pub prf_instance: JZPRFInstance<H>,
 }
 
 impl ConstraintSynthesizer<ConstraintF> for PRFCircuit {
@@ -21,17 +23,17 @@ impl ConstraintSynthesizer<ConstraintF> for PRFCircuit {
         cs: ConstraintSystemRef<ConstraintF>,
     ) -> Result<()> {
         
-        let params_var = JZPRFParamsVar::new_constant(
+        let params_var = JZPRFParamsVar::<H, HG, ConstraintF>::new_constant(
             cs.clone(),
             &self.prf_instance.params
         ).unwrap();
 
-        let prf_instance_var = JZPRFInstanceVar::new_witness(
+        let prf_instance_var = JZPRFInstanceVar::<ConstraintF>::new_witness(
             cs.clone(),
             || Ok(self.prf_instance)
         ).unwrap();
 
-        prf::constraints::generate_constraints(
+        prf::constraints::generate_constraints::<H, HG, ConstraintF>(
             cs, &params_var, &prf_instance_var
         );
         Ok(())

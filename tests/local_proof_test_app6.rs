@@ -17,12 +17,14 @@ use lib_mpc_zexe::prf::{*, constraints::*};
 use lib_mpc_zexe::coin::*;
 
 pub type ConstraintF = ark_bw6_761::Fr;
-type MT = config::ed_on_bw6_761::MerkleTreeParams;
-type MTVar = config::ed_on_bw6_761::MerkleTreeParamsVar;
+type MT = vector_commitment::bytes::pedersen::config::ed_on_bw6_761::MerkleTreeParams;
+type MTVar = vector_commitment::bytes::pedersen::config::ed_on_bw6_761::MerkleTreeParamsVar;
+type H = prf::config::ed_on_bw6_761::Hash;
+type HG = prf::config::ed_on_bw6_761::HashGadget;
 
 pub struct SpendCircuit {
-    pub prf_instance_nullifier: JZPRFInstance,
-    pub prf_instance_ownership: JZPRFInstance,
+    pub prf_instance_nullifier: JZPRFInstance<H>,
+    pub prf_instance_ownership: JZPRFInstance<H>,
     pub record: JZRecord<8, 4, ark_bls12_377::Config>,
     pub db: JZVectorDB<MT, ark_bls12_377::G1Affine>,
     pub index: usize,
@@ -37,7 +39,7 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
 
         //--------------- Private key ------------------
 
-        let params_var = JZPRFParamsVar::new_constant(
+        let params_var = JZPRFParamsVar::<H, HG, ConstraintF>::new_constant(
             cs.clone(),
             &self.prf_instance_ownership.params
         ).unwrap();
@@ -143,7 +145,7 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
             || { Ok(ark_bls12_377::Fq::from(nullifier_prf_f)) },
         ).unwrap();
 
-        let params_var = JZPRFParamsVar::new_constant(
+        let params_var = JZPRFParamsVar::<H, HG, ConstraintF>::new_constant(
             cs.clone(),
             &self.prf_instance_nullifier.params
         ).unwrap();
@@ -178,8 +180,9 @@ impl ConstraintSynthesizer<ConstraintF> for SpendCircuit {
         // prove PRF output of nullifier
         let mut prf_byte_vars: Vec::<UInt8<ConstraintF>> = Vec::new();
         prf_byte_vars.extend_from_slice(&nullifier_x_var.to_bytes()?);
-        for (i, byte_var) in nullifier_prf_instance_var.output_var.iter().enumerate() {
-            byte_var.enforce_equal(&prf_byte_vars[i])?;
+
+        for i in 0..std::cmp::min(nullifier_prf_instance_var.output_var.len(), prf_byte_vars.len()) {
+            nullifier_prf_instance_var.output_var[i].enforce_equal(&prf_byte_vars[i])?;
         }
 
         Ok(())
@@ -190,7 +193,7 @@ fn setup_witness() -> SpendCircuit {
     let seed = [0u8; 32];
     let mut rng = rand_chacha::ChaCha8Rng::from_seed(seed);
 
-    let prf_params = JZPRFParams::trusted_setup(&mut rng);
+    let prf_params = JZPRFParams::<H>::trusted_setup(&mut rng);
     let crs = JZKZGCommitmentParams::<8, 4, ark_bls12_377::Config>::trusted_setup(&mut rng);
 
     let mut entropy = [0u8; 24];
